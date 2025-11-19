@@ -17,8 +17,8 @@ def generate_launch_description():
         ),
         Node(
             package='spot_navigation',
-            executable='initial_map_publisher',
-            name='initial_map_publisher',
+            executable='initial_map2odom_publisher',
+            name='initial_map2odom_publisher',
             output='screen',
             parameters=[{
                 'map_to_fiducial_file': LaunchConfiguration('map_to_fiducial_file'),

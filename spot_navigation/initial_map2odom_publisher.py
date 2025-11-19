@@ -10,7 +10,7 @@ from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 class InitialMap2OdomPublisher(Node):
 
     def __init__(self):
-        super().__init__('initial_map_publisher')
+        super().__init__('initial_map2odom_publisher')
         self.declare_parameter('map_to_fiducial_file', 'src/spot_navigation/config/map2fiducial.yaml')
         self.declare_parameter('output_file', 'src/spot_navigation/config/localization.yaml')
 
@@ -26,6 +26,7 @@ class InitialMap2OdomPublisher(Node):
         self.static_broadcaster = StaticTransformBroadcaster(self)
 
         self.map_to_fiducial = self.load_map_to_fiducial()
+        self.work_done = False
 
     def load_map_to_fiducial(self):
         try:
@@ -80,10 +81,6 @@ class InitialMap2OdomPublisher(Node):
         # Save the transform to a YAML file
         self.save_transform_to_yaml(map_to_odom_lidar)
 
-        # Shutdown the node
-        self.get_logger().info("Shutting down after publishing transform.")
-        rclpy.shutdown()
-
     def transform_to_matrix(self, transform):
         translation = np.array([
             transform.translation.x,
@@ -119,26 +116,27 @@ class InitialMap2OdomPublisher(Node):
 
     def save_transform_to_yaml(self, transform):
         transform_data = {
-            'translation': {
-                'x': transform.transform.translation.x,
-                'y': transform.transform.translation.y,
-                'z': transform.transform.translation.z,
-            },
-            'rotation': {
-                'x': transform.transform.rotation.x,
-                'y': transform.transform.rotation.y,
-                'z': transform.transform.rotation.z,
-                'w': transform.transform.rotation.w,
+            '/**': {
+                'ros__parameters': {
+                    'dlo/localizationNode/initial_pose_use': True,
+                    'dlo/localizationNode/initial_position/x': float(transform.transform.translation.x),
+                    'dlo/localizationNode/initial_position/y': float(transform.transform.translation.y),
+                    'dlo/localizationNode/initial_position/z': float(transform.transform.translation.z),
+                    'dlo/localizationNode/initial_orientation/w': float(transform.transform.rotation.w),
+                    'dlo/localizationNode/initial_orientation/x': float(transform.transform.rotation.x),
+                    'dlo/localizationNode/initial_orientation/y': float(transform.transform.rotation.y),
+                    'dlo/localizationNode/initial_orientation/z': float(transform.transform.rotation.z),
+                }
             }
         }
         with open(self.output_file, 'w') as file:
-            yaml.dump(transform_data, file)
+            yaml.dump(transform_data, file, default_flow_style=False, sort_keys=False)
         self.get_logger().info(f"Saved transform to {self.output_file}")
 
 def main(args=None):
     rclpy.init(args=args)
     node = InitialMap2OdomPublisher()
-    rclpy.spin(node)
+    rclpy.spin_once(node)
     node.destroy_node()
     rclpy.shutdown()
 
