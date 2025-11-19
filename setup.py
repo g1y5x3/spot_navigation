@@ -30,6 +30,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'initial_map_publisher = spot_navigation.initial_map_publisher:main',
         ],
     },
 )
