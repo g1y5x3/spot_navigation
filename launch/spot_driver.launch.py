@@ -1,11 +1,12 @@
 """Launch file for the Spot ROS2 Minimal Driver node."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
 def generate_launch_description():
@@ -43,11 +44,26 @@ def generate_launch_description():
     hostname = LaunchConfiguration("hostname")
     username = LaunchConfiguration("username")
     password = LaunchConfiguration("password")
-
     odometry_frame = LaunchConfiguration("odometry_frame")
     use_streaming_client = LaunchConfiguration("use_streaming_client")
     rviz = LaunchConfiguration("rviz")
     rviz_config = LaunchConfiguration("rviz_config")
+
+    velodyne_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("spot_navigation"), "launch", "velodyne.launch.py"]
+            )
+        )
+    )
+
+    dlo_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("spot_navigation"), "launch", "dlo.launch.py"]
+            )
+        )
+    )
 
     # Spot driver node
     spot_driver_node = Node(
@@ -75,12 +91,14 @@ def generate_launch_description():
         name="rviz2",
         output="screen",
         condition=IfCondition(rviz),
-        arguments=["-d", [FindPackageShare("spot_navigation"), "/config/", rviz_config]],
+        # arguments=["-d", [FindPackageShare("spot_minimal_driver"), "/config/", rviz_config]],
     )
 
     # Group all nodes
     nodes_group = GroupAction(
         [
+            velodyne_launch,
+            dlo_launch,
             spot_driver_node,
             rviz_node,
         ]
