@@ -1,7 +1,7 @@
 """Launch file for the Spot ROS2 Minimal Driver node."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -84,6 +84,11 @@ def generate_launch_description():
         sigkill_timeout=LaunchConfiguration("sigkill_timeout", default="30"),
     )
 
+    delayed_spot_driver = TimerAction(
+        period=5.0,
+        actions=[spot_driver_node],
+    )
+
     # RViz node with conditional launch
     rviz_node = Node(
         package="rviz2",
@@ -91,7 +96,6 @@ def generate_launch_description():
         name="rviz2",
         output="screen",
         condition=IfCondition(rviz),
-        # arguments=["-d", [FindPackageShare("spot_minimal_driver"), "/config/", rviz_config]],
     )
 
     # Group all nodes
@@ -99,7 +103,7 @@ def generate_launch_description():
         [
             velodyne_launch,
             dlo_launch,
-            spot_driver_node,
+            delayed_spot_driver,
             rviz_node,
         ]
     )

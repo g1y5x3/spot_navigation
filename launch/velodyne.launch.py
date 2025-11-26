@@ -40,6 +40,7 @@ def generate_launch_description():
             output='both',
     )
 
+    # Measured TF from LiDAR to base_link
     static_transform_node = Node(
         package='tf2_ros',
         executable='static_transform_publisher',

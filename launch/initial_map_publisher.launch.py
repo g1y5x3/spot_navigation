@@ -7,7 +7,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'map_to_fiducial_file',
-            default_value='config/map2fiducial.yaml',
+            default_value='src/spot_navigation/config/map2fiducial.yaml',
             description='Path to the map to fiducial file.'
         ),
         DeclareLaunchArgument(

@@ -36,13 +36,13 @@ class InitialMap2OdomPublisher(Node):
                 t.header.stamp = self.get_clock().now().to_msg()
                 t.header.frame_id = 'map'
                 t.child_frame_id = 'fiducial'
-                t.transform.translation.x = transform_data['translation']['x']
-                t.transform.translation.y = transform_data['translation']['y']
-                t.transform.translation.z = transform_data['translation']['z']
-                t.transform.rotation.x = transform_data['rotation']['x']
-                t.transform.rotation.y = transform_data['rotation']['y']
-                t.transform.rotation.z = transform_data['rotation']['z']
-                t.transform.rotation.w = transform_data['rotation']['w']
+                t.transform.translation.x = float(transform_data['translation']['x'])
+                t.transform.translation.y = float(transform_data['translation']['y'])
+                t.transform.translation.z = float(transform_data['translation']['z'])
+                t.transform.rotation.x = float(transform_data['rotation']['x'])
+                t.transform.rotation.y = float(transform_data['rotation']['y'])
+                t.transform.rotation.z = float(transform_data['rotation']['z'])
+                t.transform.rotation.w = float(transform_data['rotation']['w'])
                 return t
         except FileNotFoundError:
             self.get_logger().error(f"Fiducial map file not found at {self.map_to_fiducial_file}")
