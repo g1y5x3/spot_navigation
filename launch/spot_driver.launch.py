@@ -67,7 +67,7 @@ def generate_launch_description():
 
     # Spot driver node
     spot_driver_node = Node(
-        package="spot_minimal_driver",
+        package="spot_driver",
         executable="spot_driver_node",
         name="spot_driver_node",
         output="screen",
