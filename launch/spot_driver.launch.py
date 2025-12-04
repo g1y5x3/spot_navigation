@@ -89,6 +89,18 @@ def generate_launch_description():
         actions=[spot_driver_node],
     )
 
+    owon_node = Node(
+        package="owon_driver",
+        executable="owon_node",
+        name="owon_multimeter",
+        output="screen",
+        parameters=[{
+            "mac_address": "A6:C0:80:91:58:C2",
+            "model": "cm2100b",
+            "odom_topic": "dlo/odom_node/odom"
+        }]
+    )
+
     # RViz node with conditional launch
     rviz_node = Node(
         package="rviz2",
@@ -104,6 +116,7 @@ def generate_launch_description():
             velodyne_launch,
             dlo_launch,
             delayed_spot_driver,
+            owon_node,
             rviz_node,
         ]
     )
