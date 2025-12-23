@@ -13,7 +13,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'frame_id',
-            default_value='thermal_camera',
+            default_value='thermal_link',
             description='The frame ID for the published thermal image.'
         ),
         DeclareLaunchArgument(

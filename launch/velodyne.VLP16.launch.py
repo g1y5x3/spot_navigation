@@ -9,15 +9,15 @@ from launch_ros.descriptions import ComposableNode
 
 def generate_launch_description():
     driver_share_dir = ament_index_python.packages.get_package_share_directory('velodyne_driver')
-    driver_params_file = os.path.join(driver_share_dir, 'config', 'VLP32C-velodyne_driver_node-params.yaml')
+    driver_params_file = os.path.join(driver_share_dir, 'config', 'VLP16-velodyne_driver_node-params.yaml')
     with open(driver_params_file, 'r') as f:
         driver_params = yaml.safe_load(f)['velodyne_driver_node']['ros__parameters']
 
     convert_share_dir = ament_index_python.packages.get_package_share_directory('velodyne_pointcloud')
-    convert_params_file = os.path.join(convert_share_dir, 'config', 'VLP32C-velodyne_transform_node-params.yaml')
+    convert_params_file = os.path.join(convert_share_dir, 'config', 'VLP16-velodyne_transform_node-params.yaml')
     with open(convert_params_file, 'r') as f:
         convert_params = yaml.safe_load(f)['velodyne_transform_node']['ros__parameters']
-    convert_params['calibration'] = os.path.join(convert_share_dir, 'params', 'VeloView-VLP-32C.yaml')
+    convert_params['calibration'] = os.path.join(convert_share_dir, 'params', 'VLP16db.yaml')
 
     container = ComposableNodeContainer(
             name='velodyne_container',
@@ -39,20 +39,4 @@ def generate_launch_description():
             output='both',
     )
 
-    static_transform_node = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_transform_broadcaster_lidar',
-        arguments=[
-            '--x',              '-0.127',
-            '--y',              '0.0',
-            '--z',              '0.3048',
-            '--yaw',            '0.0',
-            '--pitch',          '0.0',
-            '--roll',           '0.0',
-            '--frame-id',       'base_link',
-            '--child-frame-id', 'velodyne'
-        ]
-    )
-
-    return LaunchDescription([container, static_transform_node])
+    return LaunchDescription([container])
