@@ -39,17 +39,33 @@ def generate_launch_description():
         )
     )
 
-    # Static transform for Velodyne LiDAR from base_link
-    # Using values from velodyne.VLP32C.launch.py as a reference
+    # Static transform from base to sensor_base
+    static_transform_base_to_mount = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_transform_broadcaster_base_to_sensor_base',
+        arguments=[
+            '--x', '0.194',
+            '--y', '0.0',
+            '--z', '0.0805',
+            '--yaw', '0.0',
+            '--pitch', '0.0',
+            '--roll', '0.0',
+            '--frame-id', 'base_link',
+            '--child-frame-id', 'sensor_base'
+        ]
+    )
+
+    # Static transform for Velodyne LiDAR from sensor_base
     static_transform_velodyne = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        name='static_transform_broadcaster_base_to_velodyne',
+        name='static_transform_broadcaster_sensor_base_to_velodyne',
         arguments=[
             '--x', '0.0',
             '--y', '0.0',
             '--z', '0.2327',
-            '--yaw', '1.5708',
+            '--yaw', '0.0',
             '--pitch', '0.0',
             '--roll', '0.0',
             '--frame-id', 'sensor_base',
@@ -57,11 +73,11 @@ def generate_launch_description():
         ]
     )
 
-    # Static transform for IMU from base_link
+    # Static transform for IMU from sensor_base
     static_transform_imu = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        name='static_transform_broadcaster_base_to_imu',
+        name='static_transform_broadcaster_sensor_base_to_imu',
         arguments=[
             '--x', '0.0',
             '--y', '-0.085',
@@ -74,11 +90,11 @@ def generate_launch_description():
         ]
     )
 
-    # Static transform for Thermal Camera from base_link
+    # Static transform for Thermal Camera from sensor_base
     static_transform_thermal = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        name='static_transform_broadcaster_base_to_thermal',
+        name='static_transform_broadcaster_sensor_base_to_thermal',
         arguments=[
             '--x', '-0.00394',
             '--y', '0.0829',
@@ -92,10 +108,11 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        velodyne_launch,
-        imu_launch,
-        thermal_launch,
+        static_transform_base_to_mount,
         static_transform_velodyne,
         static_transform_imu,
         static_transform_thermal,
+        velodyne_launch,
+        imu_launch,
+        thermal_launch,
     ])
