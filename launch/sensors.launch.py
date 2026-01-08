@@ -45,7 +45,7 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='static_transform_broadcaster_base_to_sensor_base',
         arguments=[
-            '--x', '0.194',
+            '--x', '-0.1015',
             '--y', '0.0',
             '--z', '0.0805',
             '--yaw', '0.0',
@@ -79,12 +79,12 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='static_transform_broadcaster_sensor_base_to_imu',
         arguments=[
-            '--x', '0.0',
-            '--y', '-0.085',
+            '--x', '-0.085',
+            '--y', '0.0',
             '--z', '0.005',
             '--roll', '0.0',
             '--pitch', '0.0',
-            '--yaw', '1.5708',
+            '--yaw', '0.0',
             '--frame-id', 'sensor_base',
             '--child-frame-id', 'imu_link'
         ]
@@ -96,12 +96,12 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='static_transform_broadcaster_sensor_base_to_thermal',
         arguments=[
-            '--x', '-0.00394',
-            '--y', '0.0829',
+            '--x', '0.0829',
+            '--y', '-0.00394',
             '--z', '0.096925',
             '--roll', '0.0',
             '--pitch', '1.5708',
-            '--yaw', '1.5708',
+            '--yaw', '0.0',
             '--frame-id', 'sensor_base',
             '--child-frame-id', 'thermal_link'
         ]
