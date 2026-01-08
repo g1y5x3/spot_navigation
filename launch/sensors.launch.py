@@ -99,9 +99,9 @@ def generate_launch_description():
             '--x', '0.0829',
             '--y', '-0.00394',
             '--z', '0.096925',
-            '--roll', '0.0',
-            '--pitch', '1.5708',
-            '--yaw', '0.0',
+            '--roll', '-1.5708',
+            '--pitch', '0.0',
+            '--yaw', '-1.5708',
             '--frame-id', 'sensor_base',
             '--child-frame-id', 'thermal_link'
         ]
