@@ -42,7 +42,7 @@ def generate_launch_description():
     	description = 'Input point cloud topic name'
     )
 
-    imu_topic_cfg = LaunchConfiguration('imu_topic', default = '/imu')
+    imu_topic_cfg = LaunchConfiguration('imu_topic', default = '/imu/data')
     declare_imu_topic_arg = DeclareLaunchArgument(
     	'imu_topic',
     	default_value = imu_topic_cfg,
