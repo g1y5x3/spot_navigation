@@ -1,0 +1,12 @@
+goals:
+  - id: 1
+    position: [12.449, -11.669, 0.236]
+    description: "G1"
+  
+  - id: 2
+    position: [17.818, -1.969, 0.165]
+    description: "G2"
+
+  - id: 3
+    position: [31.402, -0.554, 0.643]
+    description: "G3"
