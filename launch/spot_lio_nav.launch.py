@@ -49,6 +49,17 @@ def generate_launch_description():
         }.items()
     )
 
+    # 4. Launch OMPL Planner & Controller
+    mpl_planner_pkg = FindPackageShare('mpl_planner')
+    ompl_planner_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([mpl_planner_pkg, 'share', 'mpl_planner', 'launch', 'ompl_nav.launch.py'])
+        ),
+        launch_arguments={
+            'use_sim_time': 'false' # Or pass a top-level arg if you add one
+        }.items()
+    )
+
     delayed_spot_driver = TimerAction(
         period=5.0,
         actions=[spot_driver_launch]
@@ -59,5 +70,6 @@ def generate_launch_description():
         odom_frame_arg,
         sensors_launch,
         lio_launch,
+        ompl_planner_launch,
         delayed_spot_driver
     ])

@@ -128,7 +128,7 @@ def generate_launch_description():
         executable='rviz2',
         name='rviz2',
         output='screen',
-        arguments=['-d', PathJoinSubstitution([get_package_share_directory(spot_nav_pkg), 'rviz', 'localization.rviz'])],
+        arguments=['-d', PathJoinSubstitution([get_package_share_directory(spot_nav_pkg), 'rviz', 'nav.rviz'])],
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
         condition=IfCondition(LaunchConfiguration('rviz'))
     )
