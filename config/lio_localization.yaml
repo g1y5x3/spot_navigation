@@ -3,6 +3,7 @@
         # frame id settings
         odom_frame_id: "odom_lidar"
         base_frame_id: "base_link"
+        map_frame_id:  "map"
 
         # icp settings
         feature_extract_enable: false
@@ -12,7 +13,7 @@
         filter_size_map: 0.5
         cube_side_length: 1000.0
         runtime_pos_log_enable: false
-        map_file_path: "./test.pcd"      # where the map is saved if used in mapping mode
+        map_file_path: "./test.pcd"
 
         common:
             lid_topic:  "/velodyne_points"
@@ -21,11 +22,11 @@
             time_offset_lidar_to_imu: 0.0
 
         preprocess:
-            lidar_type: 2                # 2 for Velodyne
+            lidar_type: 2                 # 2 for Velodyne
             scan_line: 16
-            scan_rate: 10                # Hz
-            timestamp_unit: 0            # Check if your driver uses s (0) ms (1) or us (2)
-            blind: 2.0
+            scan_rate: 10                 # Hz
+            timestamp_unit: 0             # s (0), ms (1), or us (2)
+            blind: 0.75
 
         mapping:
             acc_cov: 0.1
@@ -34,7 +35,7 @@
             b_gyr_cov: 0.0001
             fov_degree: 360.0
             det_range: 80.0
-            extrinsic_est_en:  false      # Online refinement of extrinsics
+            extrinsic_est_en:  false
             # Transform from LiDAR to IMU
             extrinsic_T: [-0.186, 0.000, 0.086]
             extrinsic_R: [1.0, 0.0, 0.0,
@@ -45,17 +46,20 @@
             pcd_save_en: true
             interval: -1
 
-        global_map:
-            map_frame_id: "map"
+        global_cloud:
             map_leaf_size: 0.1
+
+        terrain_cloud:
             use_pmf: true
             pmf_max_window_size: 5.0
-            pmf_slope: 1.0
-            pmf_initial_distance: 1.0
+            pmf_slope: 0.5
+            pmf_initial_distance: 0.3
             pmf_max_distance: 1.0
+            ceiling_height_threshold: 1.5
+            filter_operator_fov: true
+            operator_fov_deg: 120.0
 
         localization:
-            global_frame_id: "map"
             ndt_resolution: 1.0
             ndt_step_size: 0.1
             ndt_trans_epsilon: 0.01
