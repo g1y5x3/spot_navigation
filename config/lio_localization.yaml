@@ -48,7 +48,7 @@
             interval: -1
 
         global_cloud:
-            map_leaf_size: 0.1
+            map_leaf_size: 0.05
 
         terrain_cloud:
             use_pmf: true
@@ -57,7 +57,7 @@
             pmf_initial_distance: 0.3
             pmf_max_distance: 1.0
             ceiling_height_threshold: 1.5
-            filter_operator_fov: true
+            filter_operator_fov: false
             operator_fov_deg: 120.0
 
         localization:
