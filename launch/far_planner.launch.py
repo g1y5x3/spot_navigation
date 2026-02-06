@@ -3,7 +3,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction, ExecuteProcess
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Command
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch.conditions import IfCondition
 from launch_ros.actions import Node, SetParameter
 
@@ -37,6 +37,13 @@ def generate_launch_description():
         'load_prior_map',
         default_value='true',
         description='Auto-load prior map on startup'
+    )
+
+    # Boolean to enable/disable RViz
+    rviz_arg = DeclareLaunchArgument(
+        'rviz',
+        default_value='false',
+        description='Launch RViz for visualization'
     )
 
     # Config Path - now points to spot_navigation package
@@ -106,13 +113,9 @@ def generate_launch_description():
         actions=[
             ExecuteProcess(
                 cmd=[
-                    'ros2', 'topic', 'pub', '--once', '/read_file_dir', 
-                    'std_msgs/msg/String', 
-                    Command([
-                        '"data: \'',
-                        LaunchConfiguration('prior_map_path'),
-                        '\'"'
-                    ])
+                    'ros2', 'topic', 'pub', '--once', '/read_file_dir',
+                    'std_msgs/msg/String',
+                    ['data: ', LaunchConfiguration('prior_map_path')]
                 ],
                 shell=False,
                 output='screen',
@@ -121,52 +124,58 @@ def generate_launch_description():
         ]
     )
 
-    # RViz (Optional)
-    # rviz_node = Node(
-    #     package='rviz2',
-    #     executable='rviz2',
-    #     name='rviz2',
-    #     output='screen',
-    #     arguments=['-d', PathJoinSubstitution([
-    #         get_package_share_directory('spot_navigation'), 
-    #         'rviz', 
-    #         'spot.rviz'
-    #     ])],
-    #     parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}]
-    # )
+    # RViz with navigation config
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        output='screen',
+        arguments=['-d', PathJoinSubstitution([
+            get_package_share_directory('spot_navigation'),
+            'rviz',
+            'navigation.rviz'
+        ])],
+        parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+        condition=IfCondition(LaunchConfiguration('rviz'))
+    )
 
-    # Pure Pursuit Controller (from mpl_planner) - executes the local path
-    pure_pursuit_controller_node = Node(
+    # Regulated Pure Pursuit Controller (from mpl_planner) - executes the path with velocity regulation
+    regulated_pure_pursuit_controller_node = Node(
         package='mpl_planner',
-        executable='pure_pursuit_controller',
-        name='pure_pursuit_controller',
+        executable='regulated_pure_pursuit_controller',
+        name='regulated_pure_pursuit_controller',
         output='screen',
         parameters=[
             {'use_sim_time': LaunchConfiguration('use_sim_time')},
             {'lookahead_distance': 0.5},
-            {'linear_velocity': 0.2},
-            {'goal_tolerance': 0.3},
-            {'max_angular_velocity': 1.0},
-            {'robot_frame': 'base_link'}
+            {'linear_velocity': 0.5},              # Max velocity (default from teleop)
+            {'goal_tolerance': 0.3},                # User requested: 0.3
+            {'max_angular_velocity': 1.0},          # User requested: 1.0 (matches teleop default)
+            {'robot_frame': 'base_link'},
+            {'curvature_threshold': 0.5},           # Start slowing at this curvature (1/m)
+            {'min_velocity_ratio': 0.3},            # Minimum velocity as ratio of max
+            {'deceleration_distance': 0.5},         # Start decelerating this far from goal
+            {'use_velocity_regulation': True}       # Enable velocity regulation for smoother motion
         ],
         remappings=[
-            ('/local_path', '/far_path')
+            ('/local_path', '/far_path')             # Subscribe to FAR Planner's path
         ]
     )
 
     return LaunchDescription([
-        # Sets use_sim_time for all nodes that don't explicitly override it, 
+        # Sets use_sim_time for all nodes that don't explicitly override it,
         # though passing it explicitly in parameters is also good practice.
         SetParameter(name='use_sim_time', value=LaunchConfiguration('use_sim_time')),
-        
+
         use_sim_time_arg,
         config_file_arg,
         prior_map_path_arg,
         load_prior_map_arg,
+        rviz_arg,
         graph_decoder_launch,
         far_planner_node,
         goal_markers_node,
         load_prior_map_timer,
-        pure_pursuit_controller_node,
-        # rviz_node
+        regulated_pure_pursuit_controller_node,
+        rviz_node
     ])
