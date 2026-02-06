@@ -27,6 +27,7 @@
             scan_rate: 10                 # Hz
             timestamp_unit: 0             # s (0), ms (1), or us (2)
             blind: 0.75
+            max_range: 30.0
 
         mapping:
             acc_cov: 0.1
