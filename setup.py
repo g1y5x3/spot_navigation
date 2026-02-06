@@ -14,6 +14,7 @@ setup(
         ("share/" + package_name + "/rviz", glob("rviz/*.rviz")),
         ("share/" + package_name + "/config", glob("config/*.yaml")),
         ("share/" + package_name + "/map", glob("map/*.pcd") + glob("map/*.vgh")),
+        ("share/" + package_name + "/scripts", glob("scripts/*.py")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -29,6 +30,10 @@ setup(
     entry_points={
         "console_scripts": [
             'publish_goal_markers = spot_navigation.publish_goal_markers:main',
+            'goal1 = scripts.goal1:main',
+            'goal2 = scripts.goal2:main',
+            'goal3 = scripts.goal3:main',
+            'entrance = scripts.entrance:main',
         ],
     },
 )
