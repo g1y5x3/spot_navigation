@@ -34,7 +34,7 @@ Visualization Manager:
       Cell Size: 1
       Class: rviz_default_plugins/Grid
       Color: 160; 160; 164
-      Enabled: true
+      Enabled: false
       Line Style:
         Line Width: 0.029999999329447746
         Value: Lines
@@ -47,7 +47,7 @@ Visualization Manager:
       Plane: XY
       Plane Cell Count: 100
       Reference Frame: <Fixed Frame>
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/TF
       Enabled: false
       Frame Timeout: 15
@@ -82,7 +82,7 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /goal_markers
       Value: true
-    - Alpha: 0.10000000149011612
+    - Alpha: 0.5
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
         Max Value: 10
@@ -104,7 +104,7 @@ Visualization Manager:
       Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.02500000037252903
+      Size (m): 0.10000000149011612
       Style: Flat Squares
       Topic:
         Depth: 5
@@ -190,18 +190,17 @@ Visualization Manager:
         Value: /odometry_map
       Value: true
     - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
+      Enabled: false
       Name: poly
       Namespaces:
-        global_contour: true
-        unmatched_contour: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /viz_poly_topic
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: contour
@@ -219,17 +218,44 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /viz_contour_topic
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: graph
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /viz_graph_topic
+      Value: false
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: viewpoint_ext
+      Namespaces:
+        corner_direct: true
+        extend_viewpoint: true
+        origin_viewpoint: true
+        raytracing_line: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /viz_viewpoint_extend_topic
+      Value: true
     - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
-      Color: 246; 211; 45
+      Color: 248; 228; 92
       Enabled: true
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
       Length: 0.30000001192092896
-      Line Style: Lines
-      Line Width: 0.10000000149011612
-      Name: Path
+      Line Style: Billboards
+      Line Width: 0.25
+      Name: path
       Offset:
         X: 0
         Y: 0
@@ -248,6 +274,21 @@ Visualization Manager:
         Value: /far_path
       Value: true
     - Alpha: 1
+      Class: rviz_default_plugins/PointStamped
+      Color: 46; 194; 126
+      Enabled: true
+      History Length: 1
+      Name: waypoint
+      Radius: 0.5
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /way_point
+      Value: true
+    - Alpha: 1
       Axes Length: 1
       Axes Radius: 0.10000000149011612
       Class: rviz_default_plugins/Pose
@@ -255,7 +296,7 @@ Visualization Manager:
       Enabled: true
       Head Length: 0.30000001192092896
       Head Radius: 0.10000000149011612
-      Name: Pose
+      Name: goal_pose
       Shaft Length: 1
       Shaft Radius: 0.05000000074505806
       Shape: Axes
@@ -269,7 +310,7 @@ Visualization Manager:
       Value: true
   Enabled: true
   Global Options:
-    Background Color: 48; 48; 48
+    Background Color: 0; 0; 0
     Fixed Frame: map
     Frame Rate: 15
   Name: root
@@ -322,15 +363,15 @@ Visualization Manager:
       Lock Camera: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.4197965860366821
+      Pitch: 1.2547966241836548
       Point towards: -z axis
       Position:
-        X: 8.795665740966797
-        Y: -7.376626014709473
-        Z: 40.895111083984375
+        X: -8.796281814575195
+        Y: 3.3617501258850098
+        Z: 52.5471076965332
       Target Frame: base_link
       Value: FrameAligned (rviz_default_plugins)
-      Yaw: 2.56198787689209
+      Yaw: 6.14318323135376
     Saved: ~
 Window Geometry:
   Displays:

@@ -34,6 +34,7 @@ setup(
             'goal2 = scripts.goal2:main',
             'goal3 = scripts.goal3:main',
             'entrance = scripts.entrance:main',
+            'mission_tracker = scripts.mission_tracker:main',
         ],
     },
 )
