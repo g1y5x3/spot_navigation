@@ -48,8 +48,8 @@
             interval: -1
 
         global_cloud:
-            map_leaf_size: 0.05
-            publish_leaf_size: 0.2
+            map_leaf_size: 0.1
+            publish_leaf_size: 0.5
 
         terrain_cloud:
             use_pmf: true
