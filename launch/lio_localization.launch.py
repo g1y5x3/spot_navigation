@@ -43,7 +43,7 @@ def generate_launch_description():
         ]
     )
 
-    # 1. Terrain Processor (publishes /global_map)
+    # 1. Terrain Processor (publishes /global_map and /terrain_cloud that has segmented ground points and obstacle points)
     terrain_processor_node = Node(
         package="terrain_analysis",
         executable="terrain_processor",
