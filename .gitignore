@@ -1,1 +1,6 @@
 map/*
+metrics/grid_geodesic_mine_nav1_*
+metrics/grid_geodesic_mine_nav2_*
+metrics/grid_geodesic_mine_nav3_*
+metrics/grid_geodesic_mine_nav4_*
+scripts/__pycache__
