@@ -29,12 +29,12 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            'publish_goal_markers = spot_navigation.publish_goal_markers:main',
-            'goal1 = scripts.goal1:main',
-            'goal2 = scripts.goal2:main',
-            'goal3 = scripts.goal3:main',
-            'entrance = scripts.entrance:main',
-            'mission_tracker = scripts.mission_tracker:main',
+            "publish_goal_markers = spot_navigation.publish_goal_markers:main",
+            "goal1 = spot_navigation.goal1:main",
+            "goal2 = spot_navigation.goal2:main",
+            "goal3 = spot_navigation.goal3:main",
+            "entrance = spot_navigation.entrance:main",
+            "thermal_hud = spot_navigation.thermal_hud:main",
         ],
     },
 )

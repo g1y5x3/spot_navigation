@@ -31,7 +31,11 @@ import numpy as np
 from rosbags.rosbag2 import Reader
 from rosbags.typesys import Stores, get_typestore
 
-from grid_geodesic import build_grid_from_bag
+from grid_geodesic import (
+    build_grid_from_bag,
+    build_grid_from_pcd,
+    extract_contour_from_bag,
+)
 
 
 # Goal definitions (from goal*.py and entrance.py)
@@ -98,6 +102,9 @@ class TrialResult:
     path_ratio: float = 0.0
     # Internal (not displayed)
     goal_timestamp: int | None = None  # nanoseconds, for grid building
+    trajectory: np.ndarray = field(
+        default_factory=lambda: np.empty((0, 3))
+    )  # full odom path
 
 
 # Bag processing
@@ -159,6 +166,7 @@ def process_bag(bag_path: Path, goal_id: int, rep: int, typestore) -> TrialResul
 
             if len(pos_list) >= 2:
                 positions = np.array(pos_list)
+                result.trajectory = positions
                 result.start_pos = positions[0]
                 result.final_pos = positions[-1]
 
@@ -196,41 +204,9 @@ def process_bag(bag_path: Path, goal_id: int, rep: int, typestore) -> TrialResul
 
 
 # Display
-# Column widths (shared between trial and summary tables)
-_C = {
-    "trial": 16,
-    "goal": 10,
-    "sr": 4,
-    "far": 4,
-    "pi": 9,
-    "li": 9,
-    "pl": 7,
-    "spl": 7,
-    "time": 9,
-    "dfinal": 10,
-}
-_W = sum(_C.values()) + len(_C) - 1  # total width with single-space separators
-
-
-def print_trial_table(results: list[TrialResult]):
-    print("\n" + "=" * _W)
-    print("PER-TRIAL RESULTS")
-    print("=" * _W)
-    print(
-        f"{'Trial':<{_C['trial']}} {'Goal':<{_C['goal']}} {'SR':>{_C['sr']}} {'FAR':>{_C['far']}} "
-        f"{'p_i(m)':>{_C['pi']}} {'l_i(m)':>{_C['li']}} {'p/l':>{_C['pl']}} {'SPL':>{_C['spl']}} "
-        f"{'Time(s)':>{_C['time']}} {'d_final(m)':>{_C['dfinal']}}"
-    )
-    print("-" * _W)
-
-    for r in results:
-        print(
-            f"{r.bag_name:<{_C['trial']}} {GOALS[r.goal_id]['name']:<{_C['goal']}} "
-            f"{'Y' if r.success else 'N':>{_C['sr']}} {'Y' if r.far_goal_reached else 'N':>{_C['far']}} "
-            f"{r.path_length:>{_C['pi']}.2f} {r.geodesic_distance:>{_C['li']}.2f} "
-            f"{r.path_ratio:>{_C['pl']}.2f} {r.spl:>{_C['spl']}.3f} "
-            f"{r.completion_time:>{_C['time']}.1f} {r.final_distance:>{_C['dfinal']}.3f}"
-        )
+# Column widths
+_C = {"goal": 12, "n": 4, "sr": 6, "spl": 15, "pl": 15, "pi": 15, "time": 15}
+_W = sum(_C.values()) + len(_C) - 1
 
 
 def print_goal_summary(results: list[TrialResult], goal_ids: list[int]):
@@ -238,10 +214,9 @@ def print_goal_summary(results: list[TrialResult], goal_ids: list[int]):
     print("PER-GOAL SUMMARY (mean ± std)")
     print("=" * _W)
     print(
-        f"{'Goal':<{_C['trial']}} {'N':>{_C['goal'] - 6}} {'SR':>{_C['sr'] + 3}} "
-        f"{'SPL':>{_C['pi'] + _C['li'] - _C['goal'] + 6}} "
-        f"{'p/l':>{_C['pl'] + _C['spl']}} "
-        f"{'Time(s)':>{_C['time'] + _C['dfinal'] - _C['spl']}} "
+        f"{'Goal':<{_C['goal']}} {'N':>{_C['n']}} {'SR':>{_C['sr']}} "
+        f"{'SPL':>{_C['spl']}} {'p/l':>{_C['pl']}} "
+        f"{'p_i(m)':>{_C['pi']}} {'Time(s)':>{_C['time']}}"
     )
     print("-" * _W)
 
@@ -263,9 +238,10 @@ def _print_summary_row(label: str, results: list[TrialResult]):
     n_success = sum(1 for r in results if r.success)
     spls = np.array([r.spl for r in results])
     ratios = np.array([r.path_ratio for r in results if r.path_ratio > 0])
+    path_lengths = np.array([r.path_length for r in results])
     times = np.array([r.completion_time for r in results])
 
-    def fmt_mean_std(arr, val_fmt=".3f", w=13):
+    def fmt_mean_std(arr, val_fmt=".2f", w=15):
         if len(arr) == 0:
             return f"{'N/A':>{w}}"
         s = f"{np.mean(arr):{val_fmt}} ± {np.std(arr):{val_fmt}}"
@@ -273,10 +249,11 @@ def _print_summary_row(label: str, results: list[TrialResult]):
 
     sr_str = f"{n_success}/{n}"
     print(
-        f"{label:<{_C['trial']}} {n:>{_C['goal'] - 6}} {sr_str:>{_C['sr'] + 3}} "
-        f"{fmt_mean_std(spls, '.3f', _C['pi'] + _C['li'] - _C['goal'] + 6)} "
-        f"{fmt_mean_std(ratios, '.2f', _C['pl'] + _C['spl'])} "
-        f"{fmt_mean_std(times, '.1f', _C['time'] + _C['dfinal'] - _C['spl'])}"
+        f"{label:<{_C['goal']}} {n:>{_C['n']}} {sr_str:>{_C['sr']}} "
+        f"{fmt_mean_std(spls, '.3f', _C['spl'])} "
+        f"{fmt_mean_std(ratios, '.2f', _C['pl'])} "
+        f"{fmt_mean_std(path_lengths, '.2f', _C['pi'])} "
+        f"{fmt_mean_std(times, '.1f', _C['time'])}"
     )
 
 
@@ -321,14 +298,48 @@ def main():
         action="store_true",
         help="Save per-trial grid + A* path plots to metrics/ folder",
     )
+    # Default PCD map: spot_navigation/map/experimental_mine.pcd
+    default_pcd = str(
+        Path(__file__).resolve().parent.parent / "map" / "experimental_mine.pcd"
+    )
+    # Default vgh: spot_navigation/map/experimental_mine.vgh
+    default_vgh = str(
+        Path(__file__).resolve().parent.parent / "map" / "experimental_mine.vgh"
+    )
+    parser.add_argument(
+        "--pcd",
+        type=str,
+        default=default_pcd,
+        help="Path to .pcd map file for static background in plots (default: map/experimental_mine.pcd)",
+    )
+    parser.add_argument(
+        "--plot-vg",
+        action="store_true",
+        help="Save a visibility graph plot to metrics/ folder",
+    )
+    parser.add_argument(
+        "--vgh",
+        type=str,
+        default=default_vgh,
+        help="Path to .vgh file for visibility graph plot (default: map/experimental_mine.vgh)",
+    )
     args = parser.parse_args()
 
     typestore = get_typestore(Stores.ROS2_HUMBLE)
     bags_dir = Path(args.bags_dir)
     metrics_dir = Path(__file__).resolve().parent.parent / "metrics"
 
-    if args.plot:
+    if args.plot or args.plot_vg:
         metrics_dir.mkdir(exist_ok=True)
+
+    # Build static map grid from PCD once for plot backgrounds
+    map_grid = None
+    if args.plot:
+        print("Building static map grid from PCD...")
+        map_grid = build_grid_from_pcd(args.pcd, resolution=args.resolution)
+
+    if args.plot_vg:
+        _save_vg_plot(args.vgh, metrics_dir)
 
     results: list[TrialResult] = []
     missing_bags: list[str] = []
@@ -346,11 +357,15 @@ def main():
             try:
                 result = process_bag(bag_path, goal_id, rep, typestore)
 
+                # Extract per-trial contour from live visibility graph
+                contour = extract_contour_from_bag(bag_path, typestore=typestore)
+
                 # Build per-trial traversability grid and compute l_i via A*
                 grid = build_grid_from_bag(
                     bag_path,
                     goal_timestamp=result.goal_timestamp,
                     resolution=args.resolution,
+                    contour_segments=contour,
                     typestore=typestore,
                 )
                 start_xy = [float(result.start_pos[0]), float(result.start_pos[1])]
@@ -384,10 +399,13 @@ def main():
                         grid,
                         astar_path,
                         geodesic_dist,
+                        result.trajectory,
+                        result.path_length,
                         start_xy,
                         goal_xy,
                         bag_name,
                         metrics_dir,
+                        map_grid=map_grid,
                     )
 
                 results.append(result)
@@ -404,7 +422,6 @@ def main():
         print("No bags found. Nothing to report.")
         return
 
-    print_trial_table(results)
     print_goal_summary(results, args.goals)
 
     # CSV export
@@ -466,43 +483,199 @@ def main():
         print(f"\nCSV exported to: {csv_path}")
 
 
-def _save_trial_plot(
-    grid, astar_path, geodesic_dist, start_xy, goal_xy, bag_name, metrics_dir
-):
-    """Save a per-trial traversability grid + A* path plot to metrics/."""
+def _parse_vgh(vgh_path: str) -> tuple[dict[int, dict], list]:
+    """
+    Parse a .vgh file.
+
+    Returns (nodes_dict, contour_segments) where contour_segments is a list of
+    [(x1,y1), (x2,y2)] line segments from contour_connects (polygon boundary edges).
+    """
+    nodes: dict[int, dict] = {}
+    with open(vgh_path, "r") as f:
+        for line in f:
+            tokens = line.strip().split()
+            if len(tokens) < 15:
+                continue
+            node_id = int(tokens[0])
+            free_direct = int(tokens[1])
+            position = (float(tokens[2]), float(tokens[3]))
+            is_navpoint = int(tokens[13]) != 0
+
+            # Parse pipe-delimited sections after token 15:
+            # section 0: connect_nodes, 1: poly_connects, 2: contour_connects, 3: trajectory
+            sections: list[list[int]] = []
+            current: list[int] = []
+            for t in tokens[15:]:
+                if t == "|":
+                    sections.append(current)
+                    current = []
+                else:
+                    current.append(int(t))
+            sections.append(current)
+
+            contour_ids = sections[2] if len(sections) > 2 else []
+
+            nodes[node_id] = {
+                "pos": position,
+                "type": free_direct,
+                "is_navpoint": is_navpoint,
+                "contour_connects": contour_ids,
+            }
+
+    # Build contour segments (deduplicated)
+    contour_segments = []
+    seen: set[tuple[int, int]] = set()
+    for nid, node in nodes.items():
+        for cid in node["contour_connects"]:
+            if cid not in nodes:
+                continue
+            edge = (min(nid, cid), max(nid, cid))
+            if edge in seen:
+                continue
+            seen.add(edge)
+            contour_segments.append([node["pos"], nodes[cid]["pos"]])
+
+    return nodes, contour_segments
+
+
+def _save_vg_plot(vgh_path: str, metrics_dir: Path):
+    """Parse a .vgh visibility graph file and save a 2D contour plot to metrics/."""
     import matplotlib.pyplot as plt
+    from matplotlib.collections import LineCollection
+
+    nodes, contour_segments = _parse_vgh(vgh_path)
 
     fig, ax = plt.subplots(figsize=(14, 10))
 
-    extent = [
-        grid.x_min,
-        grid.x_min + grid.cols * grid.resolution,
-        grid.y_min,
-        grid.y_min + grid.rows * grid.resolution,
-    ]
-    ax.imshow(
-        grid.traversable,
-        origin="lower",
-        extent=extent,
-        cmap="Greens",
-        alpha=0.6,
-        aspect="equal",
-    )
+    # Contour edges (polygon boundary)
+    if contour_segments:
+        ax.add_collection(
+            LineCollection(contour_segments, colors="0.4", linewidths=0.8, zorder=1)
+        )
 
-    if astar_path:
-        px = [p[0] for p in astar_path]
-        py = [p[1] for p in astar_path]
-        ax.plot(px, py, "b-", linewidth=1.5, label=f"A* path ({geodesic_dist:.1f}m)")
+    # Nodes by type (skip navpoints)
+    type_styles = {
+        1: ("red", "CONVEX"),
+        2: ("blue", "CONCAVE"),
+        3: ("orange", "PILLAR"),
+    }
+    for tid, (color, label) in type_styles.items():
+        xs = [
+            n["pos"][0]
+            for n in nodes.values()
+            if n["type"] == tid and not n["is_navpoint"]
+        ]
+        ys = [
+            n["pos"][1]
+            for n in nodes.values()
+            if n["type"] == tid and not n["is_navpoint"]
+        ]
+        ax.scatter(xs, ys, c=color, s=8, label=label, zorder=2, alpha=0.7)
 
-    ax.plot(start_xy[0], start_xy[1], "ro", markersize=10, label="Start")
-    ax.plot(goal_xy[0], goal_xy[1], "r*", markersize=15, label="Goal")
-
+    n_boundary = sum(1 for n in nodes.values() if not n["is_navpoint"])
     ax.set_xlabel("X (m)")
     ax.set_ylabel("Y (m)")
     ax.set_ylim(-25, 10)
     ax.set_aspect("equal")
+    ax.legend(fontsize=8, loc="upper right")
+    ax.set_title(
+        f"Mine Contour ({n_boundary} boundary nodes, {len(contour_segments)} edges)"
+    )
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    save_path = metrics_dir / "visibility_graph.pdf"
+    plt.savefig(save_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved visibility graph to {save_path}")
+
+
+def _save_trial_plot(
+    grid,
+    astar_path,
+    geodesic_dist,
+    trajectory,
+    path_length,
+    start_xy,
+    goal_xy,
+    bag_name,
+    metrics_dir,
+    map_grid=None,
+):
+    """Save a per-trial traversability grid + A* path + robot trajectory plot to metrics/."""
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(14, 10))
+
+    # Static mine map from PCD — elevation heatmap background
+    if map_grid is not None:
+        map_extent = [
+            map_grid.x_min,
+            map_grid.x_min + map_grid.cols * map_grid.resolution,
+            map_grid.y_min,
+            map_grid.y_min + map_grid.rows * map_grid.resolution,
+        ]
+        if map_grid.elevation is not None:
+            # Higher z = greener, lower z = whiter
+            elev = map_grid.elevation.copy()
+            elev_masked = np.ma.masked_invalid(elev)
+            im = ax.imshow(
+                elev_masked,
+                origin="lower",
+                extent=map_extent,
+                cmap="Greens",
+                alpha=0.7,
+                aspect="equal",
+                zorder=0,
+            )
+            cbar = fig.colorbar(im, ax=ax, shrink=0.6, pad=0.02)
+            cbar.set_label("Elevation (m)", fontsize=10)
+        else:
+            ax.imshow(
+                map_grid.traversable,
+                origin="lower",
+                extent=map_extent,
+                cmap="Greens",
+                alpha=0.5,
+                aspect="equal",
+                zorder=0,
+            )
+
+    # Robot's actual traversed path (p_i)
+    if len(trajectory) >= 2:
+        ax.plot(
+            trajectory[:, 0],
+            trajectory[:, 1],
+            "r-",
+            linewidth=1.5,
+            alpha=0.8,
+            zorder=3,
+            label=f"$p_i$ = {path_length:.1f}m",
+        )
+
+    # Shortest path (l_i)
+    if astar_path:
+        px = [p[0] for p in astar_path]
+        py = [p[1] for p in astar_path]
+        ax.plot(
+            px,
+            py,
+            "b--",
+            linewidth=1.5,
+            zorder=3,
+            label=f"$l_i$ (A*) = {geodesic_dist:.1f}m",
+        )
+
+    ax.plot(start_xy[0], start_xy[1], "ko", markersize=10, zorder=5, label="Start")
+    ax.plot(goal_xy[0], goal_xy[1], "k*", markersize=15, zorder=5, label="Goal")
+
+    ax.set_xlabel("X (m)")
+    ax.set_ylabel("Y (m)")
+    ax.set_xlim(-25, 10)
+    ax.set_ylim(-25, 10)
+    ax.set_aspect("equal")
     ax.legend(fontsize=9)
-    ax.set_title(f"Traversability Grid + A* — {bag_name}")
+    ax.set_title(f"{bag_name}")
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
 
