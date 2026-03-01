@@ -23,6 +23,7 @@ Bag naming convention: mine_nav{goal}_r{rep}
 import argparse
 import csv
 import math
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,9 +33,7 @@ from rosbags.rosbag2 import Reader
 from rosbags.typesys import Stores, get_typestore
 
 from grid_geodesic import (
-    build_grid_from_bag,
     build_grid_from_pcd,
-    extract_contour_from_bag,
 )
 
 
@@ -332,11 +331,17 @@ def main():
     if args.plot or args.plot_vg:
         metrics_dir.mkdir(exist_ok=True)
 
-    # Build static map grid from PCD once for plot backgrounds
-    map_grid = None
-    if args.plot:
-        print("Building static map grid from PCD...")
-        map_grid = build_grid_from_pcd(args.pcd, resolution=args.resolution)
+    # Build static map grid from PCD once — used for both geodesic (A*) and plot backgrounds.
+    # Robot radius inflation ensures A* paths respect the robot's physical size.
+    # Per Anderson et al. (2018), l_i is the shortest-path distance in the
+    # environment (the full map), not in partial per-trial observations.
+    print("Building static map grid from PCD...")
+    map_grid = build_grid_from_pcd(
+        args.pcd, resolution=args.resolution, robot_radius=0.5
+    )
+    # Also build an un-inflated grid for plot background (elevation heatmap
+    # should show full traversable area, not the eroded planning grid)
+    map_grid_visual = build_grid_from_pcd(args.pcd, resolution=args.resolution)
 
     if args.plot_vg:
         _save_vg_plot(args.vgh, metrics_dir)
@@ -357,20 +362,10 @@ def main():
             try:
                 result = process_bag(bag_path, goal_id, rep, typestore)
 
-                # Extract per-trial contour from live visibility graph
-                contour = extract_contour_from_bag(bag_path, typestore=typestore)
-
-                # Build per-trial traversability grid and compute l_i via A*
-                grid = build_grid_from_bag(
-                    bag_path,
-                    goal_timestamp=result.goal_timestamp,
-                    resolution=args.resolution,
-                    contour_segments=contour,
-                    typestore=typestore,
-                )
+                # Compute l_i via A* on the static PCD map grid (with robot inflation)
                 start_xy = [float(result.start_pos[0]), float(result.start_pos[1])]
                 goal_xy = [float(result.goal_pos[0]), float(result.goal_pos[1])]
-                geodesic_dist, astar_path = grid.astar(start_xy, goal_xy)
+                geodesic_dist, astar_path = map_grid.astar(start_xy, goal_xy)
                 result.geodesic_distance = geodesic_dist
 
                 euclidean = float(
@@ -396,7 +391,7 @@ def main():
                 # Save per-trial plot
                 if args.plot:
                     _save_trial_plot(
-                        grid,
+                        map_grid,
                         astar_path,
                         geodesic_dist,
                         result.trajectory,
@@ -405,7 +400,7 @@ def main():
                         goal_xy,
                         bag_name,
                         metrics_dir,
-                        map_grid=map_grid,
+                        map_grid=map_grid_visual,
                     )
 
                 results.append(result)
@@ -675,7 +670,12 @@ def _save_trial_plot(
     ax.set_ylim(-25, 10)
     ax.set_aspect("equal")
     ax.legend(fontsize=9)
-    ax.set_title(f"{bag_name}")
+    # Parse goal/rep from bag name (e.g. mine_nav2_r3 -> Goal 2, Rep 3)
+    _m = re.match(r"mine_nav(\d+)_r(\d+)", bag_name)
+    if _m:
+        ax.set_title(f"Goal {_m.group(1)}, Rep {_m.group(2)}", pad=12)
+    else:
+        ax.set_title(bag_name, pad=12)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
 

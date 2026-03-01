@@ -22,6 +22,7 @@ Usage as module:
 import argparse
 import heapq
 import math
+import re
 import struct
 import sys
 from dataclasses import dataclass
@@ -443,6 +444,7 @@ def build_grid_from_pcd(
     ground_height_min: float = -0.2,
     ground_ratio_threshold: float = 0.1,
     coarse_factor: int = 5,
+    robot_radius: float = 0.0,
 ) -> "TraversabilityGrid":
     """
     Build a 2D traversability grid from a static PCD map.
@@ -575,6 +577,30 @@ def build_grid_from_pcd(
         traversable = labeled == largest
 
     traversable = traversable.astype(bool)
+
+    # --- Step 4b: Inflate obstacles by robot radius ---
+    if robot_radius > 0:
+        from scipy.ndimage import binary_erosion
+
+        radius_cells = int(math.ceil(robot_radius / resolution))
+        # Build a disk structuring element
+        y_k, x_k = np.ogrid[
+            -radius_cells : radius_cells + 1, -radius_cells : radius_cells + 1
+        ]
+        disk = (x_k * x_k + y_k * y_k) <= radius_cells * radius_cells
+        traversable = binary_erosion(traversable, structure=disk).astype(bool)
+        # Re-extract largest connected component after erosion
+        labeled, n_features = label(traversable)
+        if n_features > 0:
+            component_sizes = np.bincount(labeled.ravel())
+            component_sizes[0] = 0
+            largest = np.argmax(component_sizes)
+            traversable = (labeled == largest).astype(bool)
+        n_free_inflated = int(traversable.sum())
+        print(
+            f"  After robot inflation (r={robot_radius}m, "
+            f"{radius_cells} cells): traversable={n_free_inflated}"
+        )
 
     # Fill NaN gaps in elevation within traversable region using iterative
     # neighbor averaging, then smooth with 5x5 median filter.
@@ -1100,7 +1126,12 @@ def main():
         ax.set_ylim(-25, 10)
         ax.set_aspect("equal")
         ax.legend(fontsize=9)
-        ax.set_title(f"Traversability Grid — {bag_path.name}")
+        # Parse goal/rep from bag name (e.g. mine_nav2_r3 -> Goal 2, Rep 3)
+        _m = re.match(r"mine_nav(\d+)_r(\d+)", bag_path.name)
+        if _m:
+            ax.set_title(f"Goal {_m.group(1)}, Rep {_m.group(2)}", pad=12)
+        else:
+            ax.set_title(bag_path.name, pad=12)
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
 
