@@ -136,7 +136,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'radio_baud',
-            default_value='115200',
+            default_value='57600',
             description='Baud rate for the long-range radio transmitter.'
         ),
         DeclareLaunchArgument(
