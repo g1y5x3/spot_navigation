@@ -35,6 +35,7 @@ setup(
             "goal3 = spot_navigation.goal3:main",
             "entrance = spot_navigation.entrance:main",
             "thermal_hud = spot_navigation.thermal_hud:main",
+            "radio_bridge = spot_navigation.radio_bridge:main",
         ],
     },
 )
