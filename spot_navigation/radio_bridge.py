@@ -63,28 +63,35 @@ class RadioBridge(Node):
             voltage = self._latest_voltage
 
         if odom is None:
-            return
-
-        frame = {
-            "stamp": {
-                "sec": int(odom.header.stamp.sec),
-                "nanosec": int(odom.header.stamp.nanosec),
-            },
-            "frame_id": odom.header.frame_id,
-            "child_frame_id": odom.child_frame_id,
-            "position": {
-                "x": odom.pose.pose.position.x,
-                "y": odom.pose.pose.position.y,
-                "z": odom.pose.pose.position.z,
-            },
-            "orientation": {
-                "x": odom.pose.pose.orientation.x,
-                "y": odom.pose.pose.orientation.y,
-                "z": odom.pose.pose.orientation.z,
-                "w": odom.pose.pose.orientation.w,
-            },
-            "voltage": voltage,
-        }
+            frame = {
+                "stamp": None,
+                "frame_id": None,
+                "child_frame_id": None,
+                "position": None,
+                "orientation": None,
+                "voltage": voltage,
+            }
+        else:
+            frame = {
+                "stamp": {
+                    "sec": int(odom.header.stamp.sec),
+                    "nanosec": int(odom.header.stamp.nanosec),
+                },
+                "frame_id": odom.header.frame_id,
+                "child_frame_id": odom.child_frame_id,
+                "position": {
+                    "x": odom.pose.pose.position.x,
+                    "y": odom.pose.pose.position.y,
+                    "z": odom.pose.pose.position.z,
+                },
+                "orientation": {
+                    "x": odom.pose.pose.orientation.x,
+                    "y": odom.pose.pose.orientation.y,
+                    "z": odom.pose.pose.orientation.z,
+                    "w": odom.pose.pose.orientation.w,
+                },
+                "voltage": voltage,
+            }
 
         try:
             self._serial.write((json.dumps(frame, separators=(",", ":")) + "\n").encode("utf-8"))

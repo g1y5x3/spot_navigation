@@ -4,3 +4,5 @@ metrics/grid_geodesic_mine_nav2_*
 metrics/grid_geodesic_mine_nav3_*
 metrics/grid_geodesic_mine_nav4_*
 scripts/__pycache__
+__pycache__/
+*.pyc
