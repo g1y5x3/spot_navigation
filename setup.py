@@ -13,7 +13,13 @@ setup(
         ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
         ("share/" + package_name + "/rviz", glob("rviz/*.rviz")),
         ("share/" + package_name + "/config", glob("config/*.yaml")),
-        ("share/" + package_name + "/map", glob("map/*.pcd") + glob("map/*.vgh")),
+        (
+            "share/" + package_name + "/map",
+            glob("map/*.pcd")
+            + glob("map/*.vgh")
+            + glob("map/*.ply")
+            + glob("map/*.txt"),
+        ),
         ("share/" + package_name + "/scripts", glob("scripts/*.py")),
     ],
     install_requires=["setuptools"],
@@ -29,6 +35,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
+            "pcd_to_boundary = spot_navigation.pcd_to_boundary:main",
             "radio_bridge = spot_navigation.radio_bridge:main",
             "route_manager = spot_navigation.route_manager:main",
         ],

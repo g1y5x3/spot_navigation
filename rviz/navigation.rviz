@@ -82,6 +82,18 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /goal_markers
       Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: voltage_marker
+      Namespaces:
+        owon_voltage: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /owon/voltage_marker
+      Value: true
     - Alpha: 0.5
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:

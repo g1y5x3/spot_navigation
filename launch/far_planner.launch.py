@@ -27,7 +27,7 @@ def generate_launch_description():
         default_value=PathJoinSubstitution([
             get_package_share_directory('spot_navigation'),
             'map',
-            'experimental_mine.vgh'
+            'microgrid_transformed.vgh'
         ]),
         description='Path to prior map .vgh file (auto-loaded after 5s delay)'
     )
@@ -37,22 +37,6 @@ def generate_launch_description():
         'load_prior_map',
         default_value='false',
         description='Auto-load prior map on startup'
-    )
-
-    route_manager_arg = DeclareLaunchArgument(
-        'route_manager',
-        default_value='false',
-        description='Launch the spot_navigation waypoint queue manager'
-    )
-
-    route_file_arg = DeclareLaunchArgument(
-        'route_file',
-        default_value=PathJoinSubstitution([
-            get_package_share_directory('spot_navigation'),
-            'config',
-            'midpoint_route.yaml'
-        ]),
-        description='Route YAML file for the waypoint queue manager'
     )
 
     # Boolean to enable/disable RViz
@@ -112,20 +96,6 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': LaunchConfiguration('use_sim_time')}.items()
     )
 
-    route_manager_node = Node(
-        package='spot_navigation',
-        executable='route_manager',
-        name='route_manager',
-        output='screen',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')},
-            {'route_file': LaunchConfiguration('route_file')},
-            {'odom_topic': '/odometry_map'},
-            {'goal_topic': '/goal_pose'},
-        ],
-        condition=IfCondition(LaunchConfiguration('route_manager'))
-    )
-
     # Timer to auto-load prior map after graph decoder initializes
     load_prior_map_timer = TimerAction(
         period=5.0,  # Wait 5 seconds for graph decoder to be ready
@@ -169,6 +139,8 @@ def generate_launch_description():
             {'lookahead_distance': 0.5},
             {'linear_velocity': 0.5},              # Max velocity (default from teleop)
             {'goal_tolerance': 0.3},                # User requested: 0.3
+            {'control_frequency': 10.0},            # Keep /cmd_vel alive between FAR path updates
+            {'path_timeout': 2.0},                  # Stop if FAR path output becomes stale
             {'max_angular_velocity': 1.0},          # User requested: 1.0 (matches teleop default)
             {'robot_frame': 'base_link'},
             {'curvature_threshold': 0.5},           # Start slowing at this curvature (1/m)
@@ -190,12 +162,9 @@ def generate_launch_description():
         config_file_arg,
         prior_map_path_arg,
         load_prior_map_arg,
-        route_manager_arg,
-        route_file_arg,
         rviz_arg,
         graph_decoder_launch,
         far_planner_node,
-        route_manager_node,
         load_prior_map_timer,
         regulated_pure_pursuit_controller_node,
         rviz_node

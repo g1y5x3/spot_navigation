@@ -66,3 +66,6 @@
             ndt_step_size: 0.1
             ndt_trans_epsilon: 0.01
             ndt_max_iter: 30
+            ndt_map_leaf_size: 0.25
+            ndt_scan_leaf_size: 0.25
+            ndt_log_runtime: true
