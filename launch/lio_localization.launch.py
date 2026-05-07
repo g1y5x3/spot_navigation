@@ -13,7 +13,7 @@ def generate_launch_description():
     map_path_arg = DeclareLaunchArgument(
         "map_path",
         default_value=PathJoinSubstitution(
-            [get_package_share_directory(spot_nav_pkg), "map", "experimental_mine.pcd"]
+            [get_package_share_directory(spot_nav_pkg), "map", "microgrid_transformed.pcd"]
         ),
         description="Path to the global PCD map file",
     )

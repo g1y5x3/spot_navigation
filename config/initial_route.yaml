@@ -1,0 +1,10 @@
+route:
+  pre_loop:
+    - name: initial
+      position:
+        x: 1.06585
+        y: -0.984649
+        z: 0.0
+      orientation:
+        yaw: 2.71661
+  loop: []

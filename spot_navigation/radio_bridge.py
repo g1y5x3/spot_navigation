@@ -14,7 +14,7 @@ class RadioBridge(Node):
     def __init__(self):
         super().__init__("radio_bridge")
 
-        self.declare_parameter("port", "/dev/ttyUSB0")
+        self.declare_parameter("port", "/dev/radio_usb")
         self.declare_parameter("baud", 57600)
         self.declare_parameter("odom_topic", "/odometry_map")
         self.declare_parameter("voltage_topic", "/owon/value")

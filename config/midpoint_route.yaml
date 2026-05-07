@@ -1,0 +1,10 @@
+route:
+  pre_loop:
+    - name: midpoint
+      position:
+        x: 15.5887
+        y: -3.37175
+        z: 0.0
+      orientation:
+        yaw: -1.58109
+  loop: []

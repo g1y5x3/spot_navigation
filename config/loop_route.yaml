@@ -1,0 +1,38 @@
+route:
+  pre_loop: []
+  loop:
+    - name: loop_1
+      position:
+        x: 4.38347
+        y: 0.94021
+        z: 0.0
+      orientation:
+        yaw: 0.445908
+    - name: loop_2
+      position:
+        x: 12.1475
+        y: 2.7388
+        z: 0.0
+      orientation:
+        yaw: -0.174207
+    - name: loop_3
+      position:
+        x: 15.4377
+        y: -2.95677
+        z: 0.0
+      orientation:
+        yaw: -1.61901
+    - name: loop_4
+      position:
+        x: 8.70354
+        y: -5.94047
+        z: 0.0
+      orientation:
+        yaw: 3.13688
+    - name: loop_5
+      position:
+        x: -0.323454
+        y: -4.71842
+        z: 0.0
+      orientation:
+        yaw: 1.62359

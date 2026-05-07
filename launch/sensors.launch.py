@@ -121,7 +121,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'port',
-            default_value='/dev/ttyUSB1',
+            default_value='/dev/imu_usb',
             description='Serial port for the IMU device.'
         ),
         DeclareLaunchArgument(
@@ -131,7 +131,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'radio_port',
-            default_value='/dev/ttyUSB0',
+            default_value='/dev/radio_usb',
             description='Serial port connected to the long-range radio transmitter.'
         ),
         DeclareLaunchArgument(
