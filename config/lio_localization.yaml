@@ -23,7 +23,7 @@
 
         preprocess:
             lidar_type: 2                 # 2 for Velodyne
-            scan_line: 16
+            scan_line: 32                 # VLP-32C publishes ring IDs 0..31
             scan_rate: 10                 # Hz
             timestamp_unit: 0             # s (0), ms (1), or us (2)
             blind: 0.75
@@ -37,8 +37,8 @@
             fov_degree: 360.0
             det_range: 80.0
             extrinsic_est_en:  false
-            # Transform from LiDAR to IMU
-            extrinsic_T: [-0.186, 0.000, 0.086]
+            # /velodyne_points is already transformed into base_link by velodyne_pointcloud.
+            extrinsic_T: [0.000, 0.000, 0.000]
             extrinsic_R: [1.0, 0.0, 0.0,
                           0.0, 1.0, 0.0,
                           0.0, 0.0, 1.0]

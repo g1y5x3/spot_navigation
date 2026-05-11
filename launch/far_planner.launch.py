@@ -136,17 +136,18 @@ def generate_launch_description():
         output='screen',
         parameters=[
             {'use_sim_time': LaunchConfiguration('use_sim_time')},
-            {'lookahead_distance': 0.5},
+            {'lookahead_distance': 0.8},
             {'linear_velocity': 0.5},              # Max velocity (default from teleop)
             {'goal_tolerance': 0.3},                # User requested: 0.3
             {'control_frequency': 10.0},            # Keep /cmd_vel alive between FAR path updates
             {'path_timeout': 2.0},                  # Stop if FAR path output becomes stale
-            {'max_angular_velocity': 1.0},          # User requested: 1.0 (matches teleop default)
+            {'max_angular_velocity': 0.6},          # Keep autonomous turns slower than teleop
             {'robot_frame': 'base_link'},
-            {'curvature_threshold': 0.5},           # Start slowing at this curvature (1/m)
+            {'curvature_threshold': 1.5},           # Allow moderate arcs before slowing hard
             {'min_velocity_ratio': 0.3},            # Minimum velocity as ratio of max
             {'deceleration_distance': 0.5},         # Start decelerating this far from goal
-            {'use_velocity_regulation': True}       # Enable velocity regulation for smoother motion
+            {'use_velocity_regulation': True},      # Enable velocity regulation for smoother motion
+            {'heading_turn_gain': 0.6}
         ],
         remappings=[
             ('/local_path', '/far_path')             # Subscribe to FAR Planner's path

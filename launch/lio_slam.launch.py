@@ -33,6 +33,22 @@ def generate_launch_description():
         ]
     )
 
+    static_transform_map_to_odom = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="static_transform_broadcaster_map_to_odom_lidar",
+        arguments=[
+            "--x", "0.0",
+            "--y", "0.0",
+            "--z", "0.0",
+            "--roll", "0.0",
+            "--pitch", "0.0",
+            "--yaw", "0.0",
+            "--frame-id", "map",
+            "--child-frame-id", "odom_lidar",
+        ],
+    )
+
     terrain_processor_node = Node(
         package="terrain_analysis",
         executable="terrain_processor",
@@ -88,6 +104,7 @@ def generate_launch_description():
             use_sim_time_arg,
             config_file_arg,
             rviz_arg,
+            static_transform_map_to_odom,
             terrain_processor_node,
             fast_lio_node,
             rviz_node,
