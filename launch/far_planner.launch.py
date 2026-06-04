@@ -27,7 +27,7 @@ def generate_launch_description():
         default_value=PathJoinSubstitution([
             get_package_share_directory('spot_navigation'),
             'map',
-            'microgrid_transformed.vgh'
+            'microgrid_transformed_tight.vgh'
         ]),
         description='Path to prior map .vgh file (auto-loaded after 5s delay)'
     )
