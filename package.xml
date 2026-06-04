@@ -18,7 +18,7 @@
   <exec_depend>boundary_handler</exec_depend>
   <exec_depend>graph_decoder</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>mpl_planner</exec_depend>
+  <exec_depend>path_follower</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>ndt_localization</exec_depend>
   <exec_depend>owon_driver</exec_depend>

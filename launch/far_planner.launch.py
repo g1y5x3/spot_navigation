@@ -172,9 +172,9 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('rviz'))
     )
 
-    # Regulated Pure Pursuit Controller (from mpl_planner) - executes the path with velocity regulation
+    # Regulated Pure Pursuit Controller - executes the path with velocity regulation
     regulated_pure_pursuit_controller_node = Node(
-        package='mpl_planner',
+        package='path_follower',
         executable='regulated_pure_pursuit_controller',
         name='regulated_pure_pursuit_controller',
         output='screen',
