@@ -2,11 +2,11 @@ far_planner:
   ros__parameters:
     # Dynamic Planner Default Params
     main_run_freq: 2.5
-    voxel_dim: 0.12
+    voxel_dim: 0.25
     robot_dim: 0.5
     vehicle_height: 0.5
-    sensor_range: 20.0
-    terrain_range: 20.0
+    sensor_range: 25.0
+    terrain_range: 25.0
     local_planner_range: 2.0
     visualize_ratio: 0.45
     is_viewpoint_extend: true
@@ -47,13 +47,13 @@ far_planner:
     graph/filter_pool_size: 16
 
     # Corner Detector Params
-    c_detector/resize_ratio: 5.0
-    c_detector/filter_count_value: 15
+    c_detector/resize_ratio: 10.0
+    c_detector/filter_count_value: 25
     c_detector/is_save_img: false
     c_detector/img_folder_path: /path
 
     # Graph Planner Params
-    g_planner/converge_distance: 0.5  # Increased from 0.5 for earlier goal convergence (safer at corners)
+    g_planner/converge_distance: 0.75  # FAR reach-status distance for route handoff.
     g_planner/goal_adjust_radius: 1.0  # Keep office goals from being over-adjusted around nearby obstacles
     g_planner/free_counter_thred: 7
     g_planner/reach_goal_vote_size: 3
