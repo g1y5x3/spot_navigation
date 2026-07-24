@@ -16,8 +16,20 @@ def generate_launch_description():
 
     baud_arg = DeclareLaunchArgument(
         'baud',
-        default_value='115200', # Assuming IMU is configured to 115200 after one-time setup
-        description='Baud rate for serial communication with the IMU.'
+        default_value='115200',
+        description='Target baud rate for serial communication with the IMU.'
+    )
+
+    auto_configure_arg = DeclareLaunchArgument(
+        'auto_configure',
+        default_value='true',
+        description='Automatically configure the IMU for 100 Hz output when needed.'
+    )
+
+    configuration_baud_arg = DeclareLaunchArgument(
+        'configuration_baud',
+        default_value='9600',
+        description='Fallback baud rate used to configure an unconfigured IMU.'
     )
 
     # IMU driver node
@@ -28,7 +40,9 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'port': LaunchConfiguration('port'),
-            'baud': LaunchConfiguration('baud')
+            'baud': LaunchConfiguration('baud'),
+            'auto_configure': LaunchConfiguration('auto_configure'),
+            'configuration_baud': LaunchConfiguration('configuration_baud')
         }],
         remappings=[
             ('/imu/data_raw', '/imu/data') # Remap the raw topic to a more common one
@@ -38,5 +52,7 @@ def generate_launch_description():
     return LaunchDescription([
         port_arg,
         baud_arg,
+        auto_configure_arg,
+        configuration_baud_arg,
         imu_node
     ])
