@@ -39,6 +39,34 @@ def generate_launch_description():
         description='Auto-load prior map on startup'
     )
 
+    route_manager_arg = DeclareLaunchArgument(
+        'route_manager',
+        default_value='false',
+        description='Launch the status-driven waypoint mission manager'
+    )
+
+    mission_file_arg = DeclareLaunchArgument(
+        'mission_file',
+        default_value=PathJoinSubstitution([
+            get_package_share_directory('spot_navigation'),
+            'map',
+            'office_mission.yaml'
+        ]),
+        description='Mission YAML containing the initial pose and ordered waypoints'
+    )
+
+    route_manager_delay_arg = DeclareLaunchArgument(
+        'route_manager_delay',
+        default_value='6.0',
+        description='Seconds to wait for FAR and its optional prior map before the first goal'
+    )
+
+    publish_initial_pose_arg = DeclareLaunchArgument(
+        'publish_initial_pose',
+        default_value='true',
+        description='Publish and confirm the mission initial pose before navigation'
+    )
+
     # Boolean to enable/disable RViz
     rviz_arg = DeclareLaunchArgument(
         'rviz',
@@ -85,6 +113,22 @@ def generate_launch_description():
             # This topic (/way_point) needs to be consumed by your local controller.
             # ('/way_point', '/goal_manager/target_point') 
         ]
+    )
+
+    # Starts before FAR and waits for localization before publishing /initialpose.
+    # Goals are retried until FAR acknowledges them on /far_reach_goal_status.
+    route_manager_node = Node(
+        package='spot_navigation',
+        executable='route_manager',
+        name='route_manager',
+        output='screen',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            {'mission_file': LaunchConfiguration('mission_file')},
+            {'far_ready_delay': LaunchConfiguration('route_manager_delay')},
+            {'publish_initial_pose': LaunchConfiguration('publish_initial_pose')},
+        ],
+        condition=IfCondition(LaunchConfiguration('route_manager'))
     )
 
     # Graph Decoder - used for loading/saving prior maps
@@ -163,7 +207,12 @@ def generate_launch_description():
         config_file_arg,
         prior_map_path_arg,
         load_prior_map_arg,
+        route_manager_arg,
+        mission_file_arg,
+        route_manager_delay_arg,
+        publish_initial_pose_arg,
         rviz_arg,
+        route_manager_node,
         graph_decoder_launch,
         far_planner_node,
         load_prior_map_timer,

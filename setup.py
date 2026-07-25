@@ -18,7 +18,8 @@ setup(
             glob("map/*.pcd")
             + glob("map/*.vgh")
             + glob("map/*.ply")
-            + glob("map/*.txt"),
+            + glob("map/*.txt")
+            + glob("map/*.yaml"),
         ),
         ("share/" + package_name + "/scripts", glob("scripts/*.py")),
     ],
@@ -35,6 +36,8 @@ setup(
     },
     entry_points={
         "console_scripts": [
+            "boundary_marker_publisher = spot_navigation.boundary_marker_publisher:main",
+            "mission_recorder = spot_navigation.mission_recorder:main",
             "pcd_to_boundary = spot_navigation.pcd_to_boundary:main",
             "radio_bridge = spot_navigation.radio_bridge:main",
             "route_manager = spot_navigation.route_manager:main",

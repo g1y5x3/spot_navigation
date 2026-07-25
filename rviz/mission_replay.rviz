@@ -69,18 +69,6 @@ Visualization Manager:
       Radius: 0.10000000149011612
       Reference Frame: <Fixed Frame>
       Value: true
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: goal_marker
-      Namespaces:
-        {}
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /goal_markers
-      Value: true
     - Alpha: 0.5
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
