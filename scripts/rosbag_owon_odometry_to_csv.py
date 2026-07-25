@@ -223,7 +223,7 @@ def convert_bag(
         stream.flush()
         os.fsync(stream.fileno())
         stream.close()
-        temporary_path.replace(output_path)
+        _finalize_temporary_csv(temporary_path, output_path, force)
     except BaseException:
         stream.close()
         temporary_path.unlink(missing_ok=True)
@@ -291,6 +291,24 @@ def _open_temporary_csv(output_path: Path) -> tuple[Any, Path]:
     )
     stream = os.fdopen(descriptor, "w", encoding="utf-8", newline="")
     return stream, Path(temporary_name)
+
+
+def _finalize_temporary_csv(
+    temporary_path: Path,
+    output_path: Path,
+    force: bool,
+) -> None:
+    if force:
+        temporary_path.replace(output_path)
+        return
+
+    try:
+        os.link(temporary_path, output_path)
+    except FileExistsError as error:
+        raise FileExistsError(
+            f"Output file already exists: {output_path}. Use --force to replace."
+        ) from error
+    temporary_path.unlink()
 
 
 def _parse_arguments(arguments: Sequence[str] | None = None) -> argparse.Namespace:

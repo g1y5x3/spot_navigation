@@ -135,8 +135,15 @@ def read_trajectory_xy(path: Path) -> np.ndarray:
         raise ValueError(f"{path} is empty")
 
     first_line = text.splitlines()[0]
-    has_header = any(ch.isalpha() for ch in first_line)
     delimiter = "," if "," in first_line else None
+    first_values = first_line.split(",") if delimiter == "," else first_line.split()
+    try:
+        for value in first_values:
+            float(value)
+    except ValueError:
+        has_header = True
+    else:
+        has_header = False
     if has_header:
         rows: list[tuple[float, float]] = []
         if delimiter == ",":
@@ -144,20 +151,32 @@ def read_trajectory_xy(path: Path) -> np.ndarray:
                 reader = csv.DictReader(handle)
                 fieldnames = reader.fieldnames or []
                 lower_names = {name.lower(): name for name in fieldnames}
-                if "x" not in lower_names or "y" not in lower_names:
-                    raise ValueError(f"{path} must contain x and y columns")
-                x_key = lower_names["x"]
-                y_key = lower_names["y"]
+                if "x" in lower_names and "y" in lower_names:
+                    x_key = lower_names["x"]
+                    y_key = lower_names["y"]
+                elif "position_x" in lower_names and "position_y" in lower_names:
+                    x_key = lower_names["position_x"]
+                    y_key = lower_names["position_y"]
+                else:
+                    raise ValueError(
+                        f"{path} must contain x/y or position_x/position_y columns"
+                    )
                 for row in reader:
                     rows.append((float(row[x_key]), float(row[y_key])))
         else:
             lines = text.splitlines()
             fieldnames = lines[0].split()
             lower_names = {name.lower(): index for index, name in enumerate(fieldnames)}
-            if "x" not in lower_names or "y" not in lower_names:
-                raise ValueError(f"{path} must contain x and y columns")
-            x_index = lower_names["x"]
-            y_index = lower_names["y"]
+            if "x" in lower_names and "y" in lower_names:
+                x_index = lower_names["x"]
+                y_index = lower_names["y"]
+            elif "position_x" in lower_names and "position_y" in lower_names:
+                x_index = lower_names["position_x"]
+                y_index = lower_names["position_y"]
+            else:
+                raise ValueError(
+                    f"{path} must contain x/y or position_x/position_y columns"
+                )
             for line in lines[1:]:
                 values = line.split()
                 rows.append((float(values[x_index]), float(values[y_index])))
@@ -989,9 +1008,15 @@ def write_vgh(path: Path, graph: Iterable[VisibilityNode]) -> int:
     return len(nodes)
 
 
-def write_boundary_ply(path: Path, polygons: Iterable[np.ndarray], z: float) -> int:
+def write_boundary_ply(
+    path: Path,
+    polygons: Iterable[np.ndarray],
+    z: float,
+    has_outer_boundary: bool = True,
+) -> int:
     rows: list[tuple[float, float, float, int]] = []
-    for poly_index, polygon in enumerate(polygons):
+    first_polygon_index = 0 if has_outer_boundary else 1
+    for poly_index, polygon in enumerate(polygons, start=first_polygon_index):
         for x, y in polygon:
             rows.append((float(x), float(y), z, poly_index))
 
@@ -1247,7 +1272,12 @@ def main() -> None:
     stats_path = output_dir / f"{name}_boundary_stats.json"
     preview_path = output_dir / f"{name}_boundary_preview.png"
 
-    vertices = write_boundary_ply(boundary_path, polygons, args.boundary_z)
+    vertices = write_boundary_ply(
+        boundary_path,
+        polygons,
+        args.boundary_z,
+        has_outer_boundary=not args.no_outer_boundary,
+    )
     write_trajectory(trajectory_path, free_point)
     graph = build_visibility_graph(polygons, free_point, args.boundary_z)
     graph_nodes = write_vgh(vgh_path, graph)

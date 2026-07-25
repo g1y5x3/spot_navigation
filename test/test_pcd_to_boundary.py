@@ -9,9 +9,11 @@ from spot_navigation.pcd_to_boundary import (
     choose_free_point,
     extract_boundary_polygons,
     point_inside_polygon,
+    read_trajectory_xy,
     select_free_space_component,
     segments_intersect,
     shoelace_area,
+    write_boundary_ply,
     write_vgh,
 )
 
@@ -115,6 +117,50 @@ def test_write_vgh_matches_boundary_handler_format(tmp_path: Path) -> None:
 def test_write_vgh_rejects_empty_graph(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="empty visibility graph"):
         write_vgh(tmp_path / "empty.vgh", [])
+
+
+def test_read_trajectory_xy_accepts_headerless_scientific_notation(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "trajectory.txt"
+    path.write_text("1e-3 2e-3\n3e-3 4e-3\n", encoding="utf-8")
+
+    np.testing.assert_allclose(
+        read_trajectory_xy(path),
+        np.asarray([[0.001, 0.002], [0.003, 0.004]]),
+    )
+
+
+def test_read_trajectory_xy_accepts_rosbag_export_columns(tmp_path: Path) -> None:
+    path = tmp_path / "trajectory.csv"
+    path.write_text(
+        "timestamp_ns,position_x,position_y\n100,1.5,-2.5\n",
+        encoding="utf-8",
+    )
+
+    np.testing.assert_allclose(
+        read_trajectory_xy(path),
+        np.asarray([[1.5, -2.5]]),
+    )
+
+
+def test_write_boundary_ply_reserves_zero_when_outer_boundary_is_omitted(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "obstacles.ply"
+
+    write_boundary_ply(
+        path,
+        _two_obstacle_polygons(),
+        0.75,
+        has_outer_boundary=False,
+    )
+
+    polygon_indices = [
+        int(line.split()[3])
+        for line in path.read_text(encoding="utf-8").split("end_header\n", 1)[1].splitlines()
+    ]
+    assert set(polygon_indices) == {1, 2}
 
 
 def test_enclosed_map_keeps_inner_obstacle_boundaries() -> None:

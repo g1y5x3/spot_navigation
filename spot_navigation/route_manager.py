@@ -150,6 +150,7 @@ def load_mission(path: str | Path) -> Mission:
     frame_id = document.get("frame_id")
     if not isinstance(frame_id, str) or not frame_id.strip():
         raise ValueError("'frame_id' must be a non-empty string")
+    frame_id = frame_id.strip()
 
     initial_pose = _load_pose(document.get("initial_pose"), "initial_pose")
 

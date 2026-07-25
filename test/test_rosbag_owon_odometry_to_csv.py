@@ -103,6 +103,20 @@ def test_default_output_path_is_bag_sibling(tmp_path: Path) -> None:
     )
 
 
+def test_finalize_csv_does_not_clobber_concurrently_created_output(
+    tmp_path: Path,
+) -> None:
+    temporary_path = tmp_path / ".joined.csv.tmp"
+    output_path = tmp_path / "joined.csv"
+    temporary_path.write_text("generated\n", encoding="utf-8")
+    output_path.write_text("created concurrently\n", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="Use --force"):
+        MODULE._finalize_temporary_csv(temporary_path, output_path, force=False)
+
+    assert output_path.read_text(encoding="utf-8") == "created concurrently\n"
+
+
 def test_convert_bag_joins_each_voltage_to_nearest_odometry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

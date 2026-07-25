@@ -112,8 +112,6 @@ def load_boundary_ply(path: Path) -> BoundaryPolygons:
             )
         polygons.setdefault(polygon_index, []).append((x, y, z))
 
-    if 0 not in polygons:
-        raise ValueError("Boundary PLY must contain outer polygon index 0")
     for polygon_index, polygon in polygons.items():
         if len(polygon) < 3:
             raise ValueError(
@@ -163,29 +161,31 @@ def build_boundary_markers(
     line_width: float,
 ) -> MarkerArray:
     marker_array = MarkerArray()
-    marker_array.markers.append(
-        _line_marker(
-            frame_id,
-            stamp,
-            "outer_boundary",
-            [polygons[0]],
-            line_width,
-            (0.0, 1.0, 0.0),
+    if 0 in polygons:
+        marker_array.markers.append(
+            _line_marker(
+                frame_id,
+                stamp,
+                "outer_boundary",
+                [polygons[0]],
+                line_width,
+                (0.0, 1.0, 0.0),
+            )
         )
-    )
     obstacle_polygons = [
         polygon for polygon_index, polygon in polygons.items() if polygon_index != 0
     ]
-    marker_array.markers.append(
-        _line_marker(
-            frame_id,
-            stamp,
-            "obstacle_boundaries",
-            obstacle_polygons,
-            line_width,
-            (1.0, 0.0, 0.0),
+    if obstacle_polygons:
+        marker_array.markers.append(
+            _line_marker(
+                frame_id,
+                stamp,
+                "obstacle_boundaries",
+                obstacle_polygons,
+                line_width,
+                (1.0, 0.0, 0.0),
+            )
         )
-    )
     return marker_array
 
 

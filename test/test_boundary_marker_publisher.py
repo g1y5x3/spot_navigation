@@ -1,7 +1,7 @@
 import importlib.util
 import sys
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -37,6 +37,7 @@ if importlib.util.find_spec("rclpy") is None:
     _install_module("visualization_msgs", {"msg": visualization_messages})
 
 
+import spot_navigation.boundary_marker_publisher as boundary_module
 from spot_navigation.boundary_marker_publisher import (
     load_boundary_ply,
     resolve_boundary_path,
@@ -107,6 +108,61 @@ def test_load_boundary_ply_groups_polygons(tmp_path: Path) -> None:
         (4.0, 4.0, 0.75),
     ]
     assert len(polygons[1]) == 3
+
+
+def test_load_boundary_ply_accepts_obstacles_without_outer_polygon(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "obstacles.ply"
+    _write_ply(
+        path,
+        [
+            "1 1 0.75 1",
+            "2 1 0.75 1",
+            "1 2 0.75 1",
+        ],
+    )
+
+    polygons = load_boundary_ply(path)
+
+    assert list(polygons) == [1]
+
+
+def test_build_boundary_markers_treats_nonzero_polygons_as_obstacles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakePoint:
+        pass
+
+    class FakeMarker:
+        LINE_LIST = 5
+        ADD = 0
+
+        def __init__(self) -> None:
+            self.header = SimpleNamespace()
+            self.pose = SimpleNamespace(orientation=SimpleNamespace())
+            self.scale = SimpleNamespace()
+            self.color = SimpleNamespace()
+            self.points: list[FakePoint] = []
+
+    class FakeMarkerArray:
+        def __init__(self) -> None:
+            self.markers: list[FakeMarker] = []
+
+    monkeypatch.setattr(boundary_module, "Point", FakePoint)
+    monkeypatch.setattr(boundary_module, "Marker", FakeMarker)
+    monkeypatch.setattr(boundary_module, "MarkerArray", FakeMarkerArray)
+
+    markers = boundary_module.build_boundary_markers(
+        {1: [(0.0, 0.0, 0.75), (1.0, 0.0, 0.75), (0.0, 1.0, 0.75)]},
+        "map",
+        SimpleNamespace(),
+        0.1,
+    )
+
+    assert [marker.ns for marker in markers.markers] == ["obstacle_boundaries"]
+    assert markers.markers[0].color.r == pytest.approx(1.0)
+    assert markers.markers[0].color.g == pytest.approx(0.0)
 
 
 def test_load_boundary_ply_rejects_non_ascii_format(tmp_path: Path) -> None:

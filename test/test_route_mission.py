@@ -72,6 +72,17 @@ def test_load_mission_preserves_initial_pose_and_waypoint_order(tmp_path: Path) 
     assert mission.waypoints[1].orientation.z == pytest.approx(0.7071068)
 
 
+def test_load_mission_strips_frame_id_whitespace(tmp_path: Path) -> None:
+    mission = load_mission(
+        _write_mission(
+            tmp_path,
+            MISSION_YAML.replace("frame_id: map", 'frame_id: " map "'),
+        )
+    )
+
+    assert mission.frame_id == "map"
+
+
 @pytest.mark.parametrize(
     ("invalid_yaml", "expected_error"),
     (
