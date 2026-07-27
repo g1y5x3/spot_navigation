@@ -2,11 +2,11 @@ far_planner:
   ros__parameters:
     # Dynamic Planner Default Params
     main_run_freq: 2.5
-    voxel_dim: 0.25
-    robot_dim: 0.5
+    voxel_dim: 0.1
+    robot_dim: 0.2
     vehicle_height: 0.5
-    sensor_range: 25.0
-    terrain_range: 25.0
+    sensor_range: 10.0
+    terrain_range: 10.0
     local_planner_range: 2.0
     visualize_ratio: 0.45
     is_viewpoint_extend: true
@@ -32,23 +32,23 @@ far_planner:
     # Dynamic Planner Utility Params
     util/angle_noise: 10.0
     util/accept_max_align_angle: 3.0
-    util/obs_inflate_size: 1  # NOTE: Used by scan/free-terrain obstacle inflation; lower is better for narrow passages.
+    util/obs_inflate_size: 0  # NOTE: Used by scan/free-terrain obstacle inflation; lower is better for narrow passages.
     util/new_intensity_thred: 2.0
     util/terrain_free_Z: 0.3
     util/dyosb_update_thred: 4
-    util/new_point_counter: 50
+    util/new_point_counter: 30
     util/dynamic_obs_dacay_time: 20.0 # Unit: second
-    util/new_points_decay_time: 0.25  # Unit: second
+    util/new_points_decay_time: 0.5  # Unit: second
 
     # Dynamic Graph Params
-    graph/connect_votes_size: 15
+    graph/connect_votes_size: 10
     graph/clear_dumper_thred: 8
-    graph/node_finalize_thred: 8
-    graph/filter_pool_size: 16
+    graph/node_finalize_thred: 5
+    graph/filter_pool_size: 12
 
     # Corner Detector Params
-    c_detector/resize_ratio: 10.0
-    c_detector/filter_count_value: 25
+    c_detector/resize_ratio: 5.0
+    c_detector/filter_count_value: 45
     c_detector/is_save_img: false
     c_detector/img_folder_path: /path
 

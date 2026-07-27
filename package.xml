@@ -36,7 +36,6 @@
   <exec_depend>terrain_analysis</exec_depend>
   <exec_depend>velodyne_driver</exec_depend>
   <exec_depend>velodyne_pointcloud</exec_depend>
-  <exec_depend>visualization_msgs</exec_depend>
   <exec_depend>wit_ros2_imu</exec_depend>
 
   <test_depend>ament_copyright</test_depend>

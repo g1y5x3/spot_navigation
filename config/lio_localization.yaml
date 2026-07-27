@@ -53,10 +53,10 @@
 
         terrain_cloud:
             use_pmf: true
-            pmf_max_window_size: 5.0
-            pmf_slope: 0.5
-            pmf_initial_distance: 0.3
-            pmf_max_distance: 1.0
+            pmf_max_window_size: 3.0
+            pmf_slope: 0.2
+            pmf_initial_distance: 0.15
+            pmf_max_distance: 0.35
             ceiling_height_threshold: 1.5
             filter_operator_fov: false
             operator_fov_deg: 120.0

@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import LaunchConfigurationEquals
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -18,13 +19,22 @@ def generate_launch_description():
     owon_mac = LaunchConfiguration('owon_mac_address')
     owon_model = LaunchConfiguration('owon_model')
 
-    # Include the Velodyne launch file for the VLP32C variant used on this rig.
-    velodyne_launch = IncludeLaunchDescription(
+    # Include the selected Velodyne launch file.
+    vlp32c_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution(
                 [spot_nav_pkg, 'launch', 'velodyne.VLP32C.launch.py']
             )
-        )
+        ),
+        condition=LaunchConfigurationEquals('lidar_model', 'VLP32C')
+    )
+    vlp16_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [spot_nav_pkg, 'launch', 'velodyne.VLP16.launch.py']
+            )
+        ),
+        condition=LaunchConfigurationEquals('lidar_model', 'VLP16')
     )
 
     imu_node = Node(
@@ -120,6 +130,12 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument(
+            'lidar_model',
+            default_value='VLP32C',
+            choices=['VLP32C', 'VLP16'],
+            description='Velodyne lidar model to launch.'
+        ),
+        DeclareLaunchArgument(
             'port',
             default_value='/dev/imu_usb',
             description='Serial port for the IMU device.'
@@ -152,7 +168,8 @@ def generate_launch_description():
         static_transform_base_to_mount,
         static_transform_velodyne,
         static_transform_imu,
-        velodyne_launch,
+        vlp32c_launch,
+        vlp16_launch,
         imu_node,
         owon_node,
         radio_bridge_node,
