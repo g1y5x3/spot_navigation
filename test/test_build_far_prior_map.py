@@ -6,8 +6,6 @@ import numpy as np
 from pypcd4 import Encoding, PointCloud
 import pytest
 
-from spot_navigation.pcd_io import load_pcd_xyz as load_packaged_pcd_xyz
-
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts/build_far_prior_map.py"
 SPEC = importlib.util.spec_from_file_location("build_far_prior_map", SCRIPT_PATH)
 assert SPEC is not None and SPEC.loader is not None
@@ -37,7 +35,7 @@ def test_far_prior_map_builder_is_owned_by_standalone_scripts() -> None:
     assert "spot_navigation.build_far_prior_map:main" not in setup_source
 
 
-def test_pcd_loaders_support_binary_compressed(tmp_path: Path) -> None:
+def test_pcd_loader_supports_binary_compressed(tmp_path: Path) -> None:
     pcd_path = tmp_path / "compressed.pcd"
     points = np.tile(
         np.asarray([[1.0, 2.0, 3.0]], dtype=np.float32),
@@ -51,8 +49,10 @@ def test_pcd_loaders_support_binary_compressed(tmp_path: Path) -> None:
 
     assert b"DATA binary_compressed" in pcd_path.read_bytes()[:256]
     expected = points[np.isfinite(points).all(axis=1)]
-    for loader in (far_prior_map.load_pcd_xyz, load_packaged_pcd_xyz):
-        np.testing.assert_array_equal(loader(pcd_path), expected)
+    np.testing.assert_array_equal(
+        far_prior_map.load_pcd_xyz(pcd_path),
+        expected,
+    )
 
 
 def _two_obstacle_polygons() -> list[np.ndarray]:

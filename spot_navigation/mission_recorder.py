@@ -12,6 +12,7 @@ from typing import cast
 import rclpy
 import yaml
 from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovarianceStamped
+from pypcd4 import PointCloud
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
@@ -136,9 +137,15 @@ def render_mission_preview(
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
 
-    from spot_navigation.pcd_io import load_pcd_xyz
-
-    points = load_pcd_xyz(pcd_path)
+    cloud = PointCloud.from_path(pcd_path)
+    missing_fields = {"x", "y", "z"} - set(cloud.fields)
+    if missing_fields:
+        raise ValueError(f"{pcd_path} must contain x, y, z fields")
+    points = np.asarray(
+        cloud.numpy(("x", "y", "z")),
+        dtype=np.float32,
+    )
+    points = points[np.isfinite(points).all(axis=1)]
     if len(points) == 0:
         raise ValueError("mission preview PCD contains no points")
 

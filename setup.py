@@ -37,6 +37,7 @@ setup(
     entry_points={
         "console_scripts": [
             "boundary_marker_publisher = spot_navigation.boundary_marker_publisher:main",
+            "mission_compiler = spot_navigation.mission_compiler:main",
             "mission_recorder = spot_navigation.mission_recorder:main",
             "radio_bridge = spot_navigation.radio_bridge:main",
             "route_manager = spot_navigation.route_manager:main",
