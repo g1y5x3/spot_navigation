@@ -4,324 +4,561 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from enum import Enum, auto
+from pathlib import Path
+from typing import Any
 
 import rclpy
-from geometry_msgs.msg import Point, PoseStamped
+import yaml
+from geometry_msgs.msg import (
+    Pose,
+    PoseStamped,
+    PoseWithCovarianceStamped,
+)
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from visualization_msgs.msg import Marker, MarkerArray
+from rclpy.time import Time
+from std_msgs.msg import Bool
 
 
 @dataclass(frozen=True)
-class Waypoint:
-    name: str
-    x: float
-    y: float
-    z: float = 0.0
-    yaw: float = 0.0
+class Mission:
+    frame_id: str
+    initial_pose: Pose
+    waypoints: tuple[Pose, ...]
 
 
-@dataclass(frozen=True)
-class Route:
-    name: str
-    pre_loop: tuple[Waypoint, ...] = ()
-    loop: tuple[Waypoint, ...] = ()
-    loop_forever: bool = False
+class MissionEvent(Enum):
+    IGNORED = auto()
+    GOAL_ACCEPTED = auto()
+    WAYPOINT_REACHED = auto()
+    MISSION_COMPLETE = auto()
 
 
-INITIAL_WAYPOINT = Waypoint("initial", 1.06585, -0.984649, 0.0, 2.71661)
-MIDPOINT_WAYPOINT = Waypoint("midpoint", 15.5887, -3.37175, 0.0, -1.58109)
-LOOP_WAYPOINTS = (
-    Waypoint("loop_1", 4.38347, 0.94021, 0.0, 0.445908),
-    Waypoint("loop_2", 12.1475, 2.7388, 0.0, -0.174207),
-    Waypoint("loop_3", 15.4377, -2.95677, 0.0, -1.61901),
-    Waypoint("loop_4", 8.70354, -5.94047, 0.0, 3.13688),
-    Waypoint("loop_5", -0.323454, -4.71842, 0.0, 1.62359),
-)
+class MissionProgress:
+    def __init__(self, waypoints: tuple[Pose, ...]) -> None:
+        if not waypoints:
+            raise ValueError("Mission must contain at least one waypoint")
 
-ROUTES = {
-    "initial": Route("initial", pre_loop=(INITIAL_WAYPOINT,)),
-    "midpoint": Route("midpoint", pre_loop=(MIDPOINT_WAYPOINT,)),
-    "loop": Route("loop", loop=LOOP_WAYPOINTS, loop_forever=True),
-    "initial_loop": Route(
-        "initial_loop",
-        pre_loop=(INITIAL_WAYPOINT,),
-        loop=LOOP_WAYPOINTS,
-        loop_forever=True,
-    ),
-}
+        self._waypoints = waypoints
+        self._active_index = 0
+        self._goal_accepted = False
+
+    @property
+    def active_pose(self) -> Pose | None:
+        if self.is_complete:
+            return None
+        return self._waypoints[self._active_index]
+
+    @property
+    def active_index(self) -> int:
+        return self._active_index
+
+    @property
+    def is_complete(self) -> bool:
+        return self._active_index >= len(self._waypoints)
+
+    def reset_goal_acknowledgement(self) -> None:
+        self._goal_accepted = False
+
+    def handle_far_status(
+        self,
+        reached: bool,
+        *,
+        at_active_goal: bool = False,
+    ) -> MissionEvent:
+        if self.is_complete:
+            return MissionEvent.IGNORED
+
+        if not reached:
+            if self._goal_accepted:
+                return MissionEvent.IGNORED
+            self._goal_accepted = True
+            return MissionEvent.GOAL_ACCEPTED
+
+        if not at_active_goal:
+            return MissionEvent.IGNORED
+
+        self._active_index += 1
+        self._goal_accepted = False
+        if self.is_complete:
+            return MissionEvent.MISSION_COMPLETE
+        return MissionEvent.WAYPOINT_REACHED
+
+
+def _require_mapping(
+    value: Any,
+    field_name: str,
+    numeric_keys: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"'{field_name}' must be a mapping")
+
+    result = dict(value)
+    for key in numeric_keys:
+        numeric_value = result.get(key)
+        if isinstance(numeric_value, bool) or not isinstance(
+            numeric_value, (int, float)
+        ):
+            raise ValueError(f"'{field_name}.{key}' must be numeric")
+
+        numeric_value = float(numeric_value)
+        if not math.isfinite(numeric_value):
+            raise ValueError(f"'{field_name}.{key}' must be finite")
+        result[key] = numeric_value
+    return result
+
+
+def _load_pose(value: Any, field_name: str) -> Pose:
+    mapping = _require_mapping(value, field_name)
+    position = _require_mapping(
+        mapping.get("position"),
+        f"{field_name}.position",
+        ("x", "y", "z"),
+    )
+    orientation = _require_mapping(
+        mapping.get("orientation"),
+        f"{field_name}.orientation",
+        ("x", "y", "z", "w"),
+    )
+
+    qx = orientation["x"]
+    qy = orientation["y"]
+    qz = orientation["z"]
+    qw = orientation["w"]
+    quaternion_norm = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+    if quaternion_norm < 1.0e-9:
+        raise ValueError(f"'{field_name}.orientation' quaternion cannot be zero")
+
+    pose = Pose()
+    pose.position.x = position["x"]
+    pose.position.y = position["y"]
+    pose.position.z = position["z"]
+    pose.orientation.x = qx / quaternion_norm
+    pose.orientation.y = qy / quaternion_norm
+    pose.orientation.z = qz / quaternion_norm
+    pose.orientation.w = qw / quaternion_norm
+    return pose
+
+
+def load_mission(path: str | Path) -> Mission:
+    mission_path = Path(path).expanduser()
+    if not mission_path.is_file():
+        raise ValueError(f"Mission file does not exist: {mission_path}")
+
+    try:
+        raw_document = yaml.safe_load(mission_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as error:
+        raise ValueError(f"Invalid mission YAML '{mission_path}': {error}") from error
+
+    document = _require_mapping(raw_document, "mission")
+    frame_id = document.get("frame_id")
+    if not isinstance(frame_id, str) or not frame_id.strip():
+        raise ValueError("'frame_id' must be a non-empty string")
+    frame_id = frame_id.strip()
+
+    initial_pose = _load_pose(document.get("initial_pose"), "initial_pose")
+
+    raw_waypoints = document.get("waypoints")
+    if not isinstance(raw_waypoints, list) or not raw_waypoints:
+        raise ValueError("'waypoints' must be a non-empty list")
+
+    waypoints: list[Pose] = []
+    for index, raw_waypoint in enumerate(raw_waypoints):
+        field_name = f"waypoints[{index}]"
+        waypoints.append(_load_pose(raw_waypoint, field_name))
+
+    return Mission(
+        frame_id=frame_id,
+        initial_pose=initial_pose,
+        waypoints=tuple(waypoints),
+    )
+
+
+class RouteManagerState(Enum):
+    WAITING_FOR_ODOMETRY = auto()
+    WAITING_FOR_INITIAL_POSE = auto()
+    WAITING_FOR_FAR = auto()
+    WAITING_FOR_GOAL_ACCEPTANCE = auto()
+    NAVIGATING = auto()
+    COMPLETE = auto()
+    FAILED = auto()
+
+
+def _yaw_from_quaternion(x: float, y: float, z: float, w: float) -> float:
+    return math.atan2(
+        2.0 * (w * z + x * y),
+        1.0 - 2.0 * (y * y + z * z),
+    )
 
 
 def _normalize_angle(angle: float) -> float:
     return math.atan2(math.sin(angle), math.cos(angle))
 
 
-def _yaw_from_quaternion(q) -> float:
-    return math.atan2(
-        2.0 * (q.w * q.z + q.x * q.y),
-        1.0 - 2.0 * (q.y * q.y + q.z * q.z),
-    )
-
-
 class RouteManager(Node):
     def __init__(self) -> None:
         super().__init__("route_manager")
 
-        self.declare_parameter("route_name", "midpoint")
-        route_name = str(self.get_parameter("route_name").value)
-        self.route = self._select_route(route_name)
-
+        self.declare_parameter("mission_file", "")
         self.declare_parameter("odom_topic", "/odometry_map")
+        self.declare_parameter("initial_pose_topic", "/initialpose")
         self.declare_parameter("goal_topic", "/goal_pose")
-        self.declare_parameter("marker_topic", "/goal_markers")
-        self.declare_parameter("frame_id", "map")
-        self.declare_parameter("reach_tolerance_xy", 0.75)
-        self.declare_parameter("reach_tolerance_yaw", 0.75)
-        self.declare_parameter("require_yaw_tolerance", False)
-        self.declare_parameter("goal_republish_period", 2.0)
-        self.declare_parameter("start_delay_sec", 2.0)
-        self.declare_parameter("loop_forever", self.route.loop_forever)
+        self.declare_parameter("far_status_topic", "/far_reach_goal_status")
+        self.declare_parameter("publish_initial_pose", True)
+        self.declare_parameter("initial_pose_tolerance_xy", 0.75)
+        self.declare_parameter("initial_pose_tolerance_yaw", 0.35)
+        self.declare_parameter("initial_pose_retry_period", 2.0)
+        self.declare_parameter("far_ready_delay", 6.0)
+        self.declare_parameter("goal_retry_period", 2.0)
+        self.declare_parameter("goal_reached_tolerance_xy", 1.0)
+        self.declare_parameter("status_silence_timeout", 5.0)
+        self.declare_parameter("max_goal_retries", 3)
+
+        mission_file = str(self.get_parameter("mission_file").value)
+        if not mission_file:
+            raise RuntimeError("Parameter 'mission_file' must name a mission YAML file")
+
+        try:
+            self.mission: Mission = load_mission(mission_file)
+        except ValueError as error:
+            raise RuntimeError(str(error)) from error
 
         odom_topic = str(self.get_parameter("odom_topic").value)
+        initial_pose_topic = str(self.get_parameter("initial_pose_topic").value)
         goal_topic = str(self.get_parameter("goal_topic").value)
-        marker_topic = str(self.get_parameter("marker_topic").value)
-        self.frame_id = str(self.get_parameter("frame_id").value)
-        self.reach_tolerance_xy = float(self.get_parameter("reach_tolerance_xy").value)
-        self.reach_tolerance_yaw = float(self.get_parameter("reach_tolerance_yaw").value)
-        self.require_yaw_tolerance = bool(
-            self.get_parameter("require_yaw_tolerance").value
+        far_status_topic = str(self.get_parameter("far_status_topic").value)
+        self.far_status_topic = far_status_topic
+        self.publish_initial_pose = bool(
+            self.get_parameter("publish_initial_pose").value
         )
-        self.goal_republish_period = float(
-            self.get_parameter("goal_republish_period").value
+        self.initial_pose_tolerance_xy = float(
+            self.get_parameter("initial_pose_tolerance_xy").value
         )
-        self.start_delay_sec = float(self.get_parameter("start_delay_sec").value)
-        self.loop_forever = bool(self.get_parameter("loop_forever").value)
+        self.initial_pose_tolerance_yaw = float(
+            self.get_parameter("initial_pose_tolerance_yaw").value
+        )
+        self.initial_pose_retry_period = float(
+            self.get_parameter("initial_pose_retry_period").value
+        )
+        self.far_ready_delay = float(
+            self.get_parameter("far_ready_delay").value
+        )
+        self.goal_retry_period = float(
+            self.get_parameter("goal_retry_period").value
+        )
+        self.goal_reached_tolerance_xy = float(
+            self.get_parameter("goal_reached_tolerance_xy").value
+        )
+        self.status_silence_timeout = float(
+            self.get_parameter("status_silence_timeout").value
+        )
+        self.max_goal_retries = int(
+            self.get_parameter("max_goal_retries").value
+        )
+        self._validate_parameters()
 
-        self.pre_loop = list(self.route.pre_loop)
-        self.loop_points = list(self.route.loop)
-        if not self.pre_loop and not self.loop_points:
-            raise RuntimeError(f"Route '{self.route.name}' has no waypoints")
-
+        self.initial_pose_pub = self.create_publisher(
+            PoseWithCovarianceStamped, initial_pose_topic, 1
+        )
         self.goal_pub = self.create_publisher(PoseStamped, goal_topic, 10)
-        self.marker_pub = self.create_publisher(MarkerArray, marker_topic, 1)
         self.create_subscription(Odometry, odom_topic, self._odom_callback, 10)
+        self.create_subscription(Bool, far_status_topic, self._far_status_callback, 10)
 
-        self.current_pose = None
-        self.active_section = "pre_loop" if self.pre_loop else "loop"
-        self.active_index = 0
-        self.active_goal: Waypoint | None = None
-        self.route_started = False
-        self.last_publish_time = None
-        self.start_time = self.get_clock().now()
+        self.progress = MissionProgress(self.mission.waypoints)
+        self.state = RouteManagerState.WAITING_FOR_ODOMETRY
+        self.current_pose: Pose | None = None
+        self.odom_count = 0
+        self.initial_pose_publish_odom_count = 0
+        self.goal_publish_odom_count = 0
+        self.last_initial_pose_publish_time: Time | None = None
+        self.far_available_since: Time | None = None
+        self.last_goal_publish_time: Time | None = None
+        self.last_far_status_time: Time | None = None
+        self.goal_retry_count = 0
 
         self.create_timer(0.2, self._tick)
-        self.create_timer(1.0, self._publish_route_markers)
 
         self.get_logger().info(
-            f"Route manager loaded '{self.route.name}' with "
-            f"{len(self.pre_loop)} pre-loop points and "
-            f"{len(self.loop_points)} loop points"
+            f"Loaded mission '{mission_file}' with "
+            f"{len(self.mission.waypoints)} waypoints"
         )
+        self.get_logger().info("Waiting for localization odometry")
 
-    def _select_route(self, route_name: str) -> Route:
-        if route_name not in ROUTES:
-            valid_routes = ", ".join(sorted(ROUTES))
-            raise RuntimeError(
-                f"Unknown route_name '{route_name}'. Valid routes: {valid_routes}"
-            )
-        return ROUTES[route_name]
+    def _validate_parameters(self) -> None:
+        positive_parameters = {
+            "initial_pose_tolerance_xy": self.initial_pose_tolerance_xy,
+            "initial_pose_tolerance_yaw": self.initial_pose_tolerance_yaw,
+            "initial_pose_retry_period": self.initial_pose_retry_period,
+            "goal_retry_period": self.goal_retry_period,
+            "goal_reached_tolerance_xy": self.goal_reached_tolerance_xy,
+            "status_silence_timeout": self.status_silence_timeout,
+        }
+        for name, value in positive_parameters.items():
+            if value <= 0.0:
+                raise RuntimeError(f"Parameter '{name}' must be greater than zero")
+        if self.far_ready_delay < 0.0:
+            raise RuntimeError("Parameter 'far_ready_delay' cannot be negative")
+        if self.max_goal_retries < 0:
+            raise RuntimeError("Parameter 'max_goal_retries' cannot be negative")
 
     def _odom_callback(self, msg: Odometry) -> None:
         self.current_pose = msg.pose.pose
+        self.odom_count += 1
+
+    def _far_status_callback(self, msg: Bool) -> None:
+        if self.state not in (
+            RouteManagerState.WAITING_FOR_GOAL_ACCEPTANCE,
+            RouteManagerState.NAVIGATING,
+        ):
+            return
+
+        if self.progress.is_complete:
+            return
+        waypoint_index = self.progress.active_index
+
+        at_active_goal = (
+            bool(msg.data)
+            and self.current_pose is not None
+            and self._active_goal_matches(self.current_pose)
+        )
+        event = self.progress.handle_far_status(
+            bool(msg.data), at_active_goal=at_active_goal
+        )
+        now = self.get_clock().now()
+
+        if not msg.data:
+            self.last_far_status_time = now
+
+        if event is MissionEvent.GOAL_ACCEPTED:
+            self.state = RouteManagerState.NAVIGATING
+            self.get_logger().info(
+                f"FAR accepted waypoint {waypoint_index}; waiting for success"
+            )
+            return
+
+        if event is MissionEvent.WAYPOINT_REACHED:
+            self.get_logger().info(f"FAR reached waypoint {waypoint_index}")
+            self.goal_retry_count = 0
+            self.last_far_status_time = None
+            self.state = RouteManagerState.WAITING_FOR_FAR
+            return
+
+        if event is MissionEvent.MISSION_COMPLETE:
+            self.get_logger().info(
+                f"FAR reached waypoint {waypoint_index}; mission complete"
+            )
+            self.state = RouteManagerState.COMPLETE
+            return
+
+        if msg.data and event is MissionEvent.IGNORED:
+            self.get_logger().warning(
+                "Ignored FAR success without fresh odometry at current goal"
+            )
 
     def _tick(self) -> None:
+        if self.state in (RouteManagerState.COMPLETE, RouteManagerState.FAILED):
+            return
+
+        if self.state is RouteManagerState.WAITING_FOR_ODOMETRY:
+            self._tick_waiting_for_odometry()
+            return
+
+        if self.state is RouteManagerState.WAITING_FOR_INITIAL_POSE:
+            self._tick_waiting_for_initial_pose()
+            return
+
+        if self.state is RouteManagerState.WAITING_FOR_FAR:
+            self._tick_waiting_for_far()
+            return
+
+        if self.state is RouteManagerState.WAITING_FOR_GOAL_ACCEPTANCE:
+            self._tick_waiting_for_goal_acceptance()
+            return
+
+        if self.state is RouteManagerState.NAVIGATING:
+            self._tick_navigating()
+
+    def _tick_waiting_for_odometry(self) -> None:
         if self.current_pose is None:
             return
-
-        elapsed = (self.get_clock().now() - self.start_time).nanoseconds / 1e9
-        if not self.route_started and elapsed < self.start_delay_sec:
-            return
-        self.route_started = True
-
-        if self.active_goal is None:
-            self.active_goal = self._current_waypoint()
-            if self.active_goal is None:
-                return
-            self._publish_active_goal(force=True)
-            return
-
-        if self._goal_reached(self.active_goal):
-            self.get_logger().info(
-                f"Reached waypoint {self.active_goal.name} "
-                f"in section {self.active_section}"
+        if not self.publish_initial_pose:
+            self.get_logger().warning(
+                "Initial-pose publication disabled; using existing localization"
             )
-            next_goal = self._advance_goal()
-            if next_goal is None:
-                self.get_logger().info("Route complete; no more waypoints to publish")
-                self.active_goal = None
-                self._publish_route_markers()
-                return
-            self.active_goal = next_goal
-            self._publish_active_goal(force=True)
-            self._publish_route_markers()
+            self.state = RouteManagerState.WAITING_FOR_FAR
+            return
+        if self.initial_pose_pub.get_subscription_count() == 0:
             return
 
-        self._publish_active_goal(force=False)
+        self._publish_initial_pose()
+        self.state = RouteManagerState.WAITING_FOR_INITIAL_POSE
 
-    def _current_waypoint(self) -> Waypoint | None:
-        if self.active_section == "pre_loop":
-            if self.active_index < len(self.pre_loop):
-                return self.pre_loop[self.active_index]
-            self.active_section = "loop"
-            self.active_index = 0
-
-        if self.active_section == "loop" and self.active_index < len(self.loop_points):
-            return self.loop_points[self.active_index]
-
-        return None
-
-    def _advance_goal(self) -> Waypoint | None:
-        self.active_index += 1
-
-        if self.active_section == "pre_loop":
-            if self.active_index < len(self.pre_loop):
-                return self.pre_loop[self.active_index]
-            self.active_section = "loop"
-            self.active_index = 0
-            if self.loop_points:
-                return self.loop_points[self.active_index]
-            return None
-
-        if not self.loop_points:
-            return None
-
-        if self.active_index >= len(self.loop_points):
-            if not self.loop_forever:
-                return None
-            self.active_index = 0
-
-        return self.loop_points[self.active_index]
-
-    def _goal_reached(self, waypoint: Waypoint) -> bool:
-        dx = self.current_pose.position.x - waypoint.x
-        dy = self.current_pose.position.y - waypoint.y
-        distance_xy = math.hypot(dx, dy)
-        if distance_xy > self.reach_tolerance_xy:
-            return False
-
-        if not self.require_yaw_tolerance:
-            return True
-
-        yaw_robot = _yaw_from_quaternion(self.current_pose.orientation)
-        yaw_error = abs(_normalize_angle(yaw_robot - waypoint.yaw))
-        return yaw_error <= self.reach_tolerance_yaw
-
-    def _publish_active_goal(self, force: bool) -> None:
-        if self.active_goal is None:
+    def _tick_waiting_for_initial_pose(self) -> None:
+        if (
+            self.current_pose is not None
+            and self.odom_count > self.initial_pose_publish_odom_count
+            and self._initial_pose_matches(self.current_pose)
+        ):
+            self.get_logger().info("Initial pose applied by localization")
+            self.state = RouteManagerState.WAITING_FOR_FAR
             return
 
-        now = self.get_clock().now()
-        if not force and self.last_publish_time is not None:
-            dt = (now - self.last_publish_time).nanoseconds / 1e9
-            if dt < self.goal_republish_period:
-                return
+        if self.initial_pose_pub.get_subscription_count() == 0:
+            return
+        if self._elapsed_since(self.last_initial_pose_publish_time) < (
+            self.initial_pose_retry_period
+        ):
+            return
 
-        msg = PoseStamped()
-        msg.header.frame_id = self.frame_id
-        msg.header.stamp = now.to_msg()
-        msg.pose.position.x = self.active_goal.x
-        msg.pose.position.y = self.active_goal.y
-        msg.pose.position.z = self.active_goal.z
-        msg.pose.orientation.z = math.sin(self.active_goal.yaw / 2.0)
-        msg.pose.orientation.w = math.cos(self.active_goal.yaw / 2.0)
+        self.get_logger().warning(
+            "Initial pose not yet reflected in /odometry_map; publishing it again"
+        )
+        self._publish_initial_pose()
 
-        self.goal_pub.publish(msg)
-        self.last_publish_time = now
-        self.get_logger().info(
-            f"Published waypoint {self.active_goal.name}: "
-            f"x={msg.pose.position.x:.3f}, "
-            f"y={msg.pose.position.y:.3f}, "
-            f"yaw={self.active_goal.yaw:.3f}"
+    def _tick_waiting_for_far(self) -> None:
+        if not self._far_available():
+            self.far_available_since = None
+            return
+        if self.far_available_since is None:
+            self.far_available_since = self.get_clock().now()
+            return
+        if self._elapsed_since(self.far_available_since) < self.far_ready_delay:
+            return
+        if self.progress.active_pose is None:
+            self.state = RouteManagerState.COMPLETE
+            return
+
+        self._publish_active_goal()
+        self.state = RouteManagerState.WAITING_FOR_GOAL_ACCEPTANCE
+
+    def _tick_waiting_for_goal_acceptance(self) -> None:
+        if not self._far_available():
+            self.far_available_since = None
+            self.state = RouteManagerState.WAITING_FOR_FAR
+            return
+        if self._elapsed_since(self.last_goal_publish_time) < self.goal_retry_period:
+            return
+
+        self.get_logger().warning(
+            "FAR has not acknowledged current goal; publishing it again"
+        )
+        self._publish_active_goal()
+
+    def _tick_navigating(self) -> None:
+        if not self._far_available():
+            self.progress.reset_goal_acknowledgement()
+            self.far_available_since = None
+            self.state = RouteManagerState.WAITING_FOR_FAR
+            return
+        if (
+            self._elapsed_since(self.last_far_status_time)
+            < self.status_silence_timeout
+        ):
+            return
+
+        self.goal_retry_count += 1
+        if self.goal_retry_count > self.max_goal_retries:
+            self.get_logger().error(
+                f"FAR status became silent at waypoint "
+                f"{self.progress.active_index}; "
+                f"mission failed after {self.max_goal_retries} retries"
+            )
+            self.state = RouteManagerState.FAILED
+            return
+
+        self.get_logger().warning(
+            "FAR status became silent; retrying current goal "
+            f"({self.goal_retry_count}/{self.max_goal_retries})"
+        )
+        self.progress.reset_goal_acknowledgement()
+        self.last_far_status_time = None
+        self._publish_active_goal()
+        self.state = RouteManagerState.WAITING_FOR_GOAL_ACCEPTANCE
+
+    def _far_available(self) -> bool:
+        return (
+            self.goal_pub.get_subscription_count() > 0
+            and self.count_publishers(self.far_status_topic) > 0
         )
 
-    def _all_waypoints(self) -> list[Waypoint]:
-        return self.pre_loop + self.loop_points
+    def _elapsed_since(self, timestamp: Time | None) -> float:
+        if timestamp is None:
+            return math.inf
+        return (self.get_clock().now() - timestamp).nanoseconds / 1.0e9
 
-    def _publish_route_markers(self) -> None:
-        now = self.get_clock().now().to_msg()
-        markers = MarkerArray()
+    def _active_goal_matches(self, current_pose: Pose) -> bool:
+        if self.odom_count <= self.goal_publish_odom_count:
+            return False
+        active_pose = self.progress.active_pose
+        if active_pose is None:
+            return False
+        distance_xy = math.hypot(
+            current_pose.position.x - active_pose.position.x,
+            current_pose.position.y - active_pose.position.y,
+        )
+        return distance_xy <= self.goal_reached_tolerance_xy
 
-        delete_marker = Marker()
-        delete_marker.action = Marker.DELETEALL
-        markers.markers.append(delete_marker)
+    def _initial_pose_matches(self, current_pose: Pose) -> bool:
+        initial_pose = self.mission.initial_pose
+        distance_xy = math.hypot(
+            current_pose.position.x - initial_pose.position.x,
+            current_pose.position.y - initial_pose.position.y,
+        )
+        if distance_xy > self.initial_pose_tolerance_xy:
+            return False
 
-        route_points = self._all_waypoints()
-        if route_points:
-            line = Marker()
-            line.header.frame_id = self.frame_id
-            line.header.stamp = now
-            line.ns = "route_manager"
-            line.id = 0
-            line.type = Marker.LINE_STRIP
-            line.action = Marker.ADD
-            line.scale.x = 0.06
-            line.color.r = 0.1
-            line.color.g = 0.4
-            line.color.b = 1.0
-            line.color.a = 0.8
-            for waypoint in route_points:
-                point = Point()
-                point.x = waypoint.x
-                point.y = waypoint.y
-                point.z = waypoint.z + 0.2
-                line.points.append(point)
-            markers.markers.append(line)
+        current_yaw = _yaw_from_quaternion(
+            current_pose.orientation.x,
+            current_pose.orientation.y,
+            current_pose.orientation.z,
+            current_pose.orientation.w,
+        )
+        initial_yaw = _yaw_from_quaternion(
+            initial_pose.orientation.x,
+            initial_pose.orientation.y,
+            initial_pose.orientation.z,
+            initial_pose.orientation.w,
+        )
+        yaw_error = abs(_normalize_angle(current_yaw - initial_yaw))
+        return yaw_error <= self.initial_pose_tolerance_yaw
 
-        active_name = self.active_goal.name if self.active_goal is not None else ""
-        for marker_index, waypoint in enumerate(route_points, start=1):
-            sphere = Marker()
-            sphere.header.frame_id = self.frame_id
-            sphere.header.stamp = now
-            sphere.ns = "route_manager_goals"
-            sphere.id = marker_index
-            sphere.type = Marker.SPHERE
-            sphere.action = Marker.ADD
-            sphere.pose.position.x = waypoint.x
-            sphere.pose.position.y = waypoint.y
-            sphere.pose.position.z = waypoint.z + 0.25
-            sphere.scale.x = 0.35
-            sphere.scale.y = 0.35
-            sphere.scale.z = 0.35
-            if waypoint.name == active_name:
-                sphere.color.r = 0.0
-                sphere.color.g = 1.0
-                sphere.color.b = 0.2
-            else:
-                sphere.color.r = 0.1
-                sphere.color.g = 0.4
-                sphere.color.b = 1.0
-            sphere.color.a = 0.9
-            markers.markers.append(sphere)
+    def _publish_initial_pose(self) -> None:
+        now = self.get_clock().now()
+        initial_pose = self.mission.initial_pose
+        msg = PoseWithCovarianceStamped()
+        msg.header.frame_id = self.mission.frame_id
+        msg.header.stamp = now.to_msg()
+        msg.pose.pose = initial_pose
+        self.initial_pose_pub.publish(msg)
+        self.initial_pose_publish_odom_count = self.odom_count
+        self.last_initial_pose_publish_time = now
+        self.get_logger().info(
+            "Published initial pose: "
+            f"x={initial_pose.position.x:.3f}, "
+            f"y={initial_pose.position.y:.3f}"
+        )
 
-            text = Marker()
-            text.header.frame_id = self.frame_id
-            text.header.stamp = now
-            text.ns = "route_manager_labels"
-            text.id = marker_index + 1000
-            text.type = Marker.TEXT_VIEW_FACING
-            text.action = Marker.ADD
-            text.pose.position.x = waypoint.x
-            text.pose.position.y = waypoint.y
-            text.pose.position.z = waypoint.z + 0.75
-            text.scale.z = 0.35
-            text.color.r = 1.0
-            text.color.g = 1.0
-            text.color.b = 1.0
-            text.color.a = 0.95
-            text.text = waypoint.name
-            markers.markers.append(text)
+    def _publish_active_goal(self) -> None:
+        active_pose = self.progress.active_pose
+        if active_pose is None:
+            return
+        waypoint_index = self.progress.active_index
 
-        self.marker_pub.publish(markers)
+        now = self.get_clock().now()
+        msg = PoseStamped()
+        msg.header.frame_id = self.mission.frame_id
+        msg.header.stamp = now.to_msg()
+        msg.pose = active_pose
+
+        self.goal_publish_odom_count = self.odom_count
+        self.goal_pub.publish(msg)
+        self.last_goal_publish_time = now
+        self.get_logger().info(
+            f"Published waypoint {waypoint_index}: "
+            f"x={active_pose.position.x:.3f}, "
+            f"y={active_pose.position.y:.3f}"
+        )
 
 
 def main(args=None) -> None:

@@ -1,4 +1,5 @@
 map/*
+!map/*.yaml
 metrics/grid_geodesic_mine_nav1_*
 metrics/grid_geodesic_mine_nav2_*
 metrics/grid_geodesic_mine_nav3_*
