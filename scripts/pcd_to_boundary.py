@@ -14,80 +14,15 @@ from typing import Iterable, TextIO, cast
 
 import cv2
 import numpy as np
-
-
-def _pcd_dtype(field_sizes: list[int], field_types: list[str]) -> list[tuple[str, str]]:
-    type_map = {
-        ("F", 4): "<f4",
-        ("F", 8): "<f8",
-        ("I", 1): "i1",
-        ("I", 2): "<i2",
-        ("I", 4): "<i4",
-        ("I", 8): "<i8",
-        ("U", 1): "u1",
-        ("U", 2): "<u2",
-        ("U", 4): "<u4",
-        ("U", 8): "<u8",
-    }
-    dtype = []
-    for idx, (size, field_type) in enumerate(zip(field_sizes, field_types)):
-        key = (field_type.upper(), size)
-        if key not in type_map:
-            raise ValueError(f"Unsupported PCD field type/size: {field_type}{size}")
-        dtype.append((f"f{idx}", type_map[key]))
-    return dtype
+from pypcd4 import PointCloud
 
 
 def load_pcd_xyz(path: Path) -> np.ndarray:
-    header: list[str] = []
-    with path.open("rb") as handle:
-        while True:
-            line = handle.readline()
-            if not line:
-                raise ValueError(f"{path} ended before a DATA line")
-            decoded = line.decode("ascii", errors="ignore").strip()
-            header.append(decoded)
-            if decoded.startswith("DATA"):
-                data = handle.read()
-                break
-
-    meta: dict[str, list[str]] = {}
-    for line in header:
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split()
-        meta[parts[0].upper()] = parts[1:]
-
-    fields = meta.get("FIELDS")
-    if not fields or not {"x", "y", "z"}.issubset(fields):
+    cloud = PointCloud.from_path(path)
+    missing_fields = {"x", "y", "z"} - set(cloud.fields)
+    if missing_fields:
         raise ValueError(f"{path} must contain x, y, z fields")
-
-    points = int(meta.get("POINTS", ["0"])[0])
-    sizes = [int(v) for v in meta.get("SIZE", [])]
-    types = meta.get("TYPE", [])
-    counts = [int(v) for v in meta.get("COUNT", ["1"] * len(fields))]
-    data_mode = meta.get("DATA", [""])[0].lower()
-
-    if len(fields) != len(sizes) or len(fields) != len(types):
-        raise ValueError("Malformed PCD header: FIELDS/SIZE/TYPE lengths differ")
-    if any(count != 1 for count in counts):
-        raise ValueError("This extractor supports scalar PCD fields only")
-
-    xyz_indices = [fields.index(axis) for axis in ("x", "y", "z")]
-
-    if data_mode == "binary":
-        dtype = np.dtype(_pcd_dtype(sizes, types))
-        cloud = np.frombuffer(data, dtype=dtype, count=points)
-        xyz = np.column_stack([cloud[f"f{idx}"] for idx in xyz_indices])
-    elif data_mode == "ascii":
-        table = np.loadtxt(data.splitlines(), dtype=np.float32)
-        if table.ndim == 1:
-            table = table.reshape(1, -1)
-        xyz = table[:, xyz_indices]
-    else:
-        raise ValueError(f"Unsupported PCD DATA mode: {data_mode}")
-
-    xyz = np.asarray(xyz, dtype=np.float32)
+    xyz = np.asarray(cloud.numpy(("x", "y", "z")), dtype=np.float32)
     return xyz[np.isfinite(xyz).all(axis=1)]
 
 

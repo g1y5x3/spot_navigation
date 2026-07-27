@@ -1,21 +1,58 @@
+import importlib.util
 from pathlib import Path
+import sys
 
 import numpy as np
+from pypcd4 import Encoding, PointCloud
 import pytest
 
-from spot_navigation.pcd_to_boundary import (
-    FreeDirection,
-    build_visibility_graph,
-    choose_free_point,
-    extract_boundary_polygons,
-    point_inside_polygon,
-    read_trajectory_xy,
-    select_free_space_component,
-    segments_intersect,
-    shoelace_area,
-    write_boundary_ply,
-    write_vgh,
-)
+from spot_navigation.pcd_io import load_pcd_xyz as load_packaged_pcd_xyz
+
+SCRIPT_PATH = Path(__file__).parents[1] / "scripts/pcd_to_boundary.py"
+SPEC = importlib.util.spec_from_file_location("pcd_to_boundary_script", SCRIPT_PATH)
+assert SPEC is not None and SPEC.loader is not None
+pcd_to_boundary = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = pcd_to_boundary
+SPEC.loader.exec_module(pcd_to_boundary)
+
+FreeDirection = pcd_to_boundary.FreeDirection
+build_visibility_graph = pcd_to_boundary.build_visibility_graph
+choose_free_point = pcd_to_boundary.choose_free_point
+extract_boundary_polygons = pcd_to_boundary.extract_boundary_polygons
+point_inside_polygon = pcd_to_boundary.point_inside_polygon
+read_trajectory_xy = pcd_to_boundary.read_trajectory_xy
+select_free_space_component = pcd_to_boundary.select_free_space_component
+segments_intersect = pcd_to_boundary.segments_intersect
+shoelace_area = pcd_to_boundary.shoelace_area
+write_boundary_ply = pcd_to_boundary.write_boundary_ply
+write_vgh = pcd_to_boundary.write_vgh
+
+
+def test_pcd_converter_is_owned_by_standalone_scripts() -> None:
+    package_root = Path(__file__).parents[1]
+
+    assert not (package_root / "spot_navigation/pcd_to_boundary.py").exists()
+    assert (package_root / "scripts/pcd_to_boundary.py").is_file()
+    setup_source = (package_root / "setup.py").read_text(encoding="utf-8")
+    assert "spot_navigation.pcd_to_boundary:main" not in setup_source
+
+
+def test_pcd_loaders_support_binary_compressed(tmp_path: Path) -> None:
+    pcd_path = tmp_path / "compressed.pcd"
+    points = np.tile(
+        np.asarray([[1.0, 2.0, 3.0]], dtype=np.float32),
+        (100, 1),
+    )
+    points[50, 0] = np.nan
+    points[-1] = [6.0, 7.0, 8.0]
+    PointCloud.from_xyz_points(points).save(
+        pcd_path, Encoding.BINARY_COMPRESSED
+    )
+
+    assert b"DATA binary_compressed" in pcd_path.read_bytes()[:256]
+    expected = points[np.isfinite(points).all(axis=1)]
+    for loader in (pcd_to_boundary.load_pcd_xyz, load_packaged_pcd_xyz):
+        np.testing.assert_array_equal(loader(pcd_path), expected)
 
 
 def _two_obstacle_polygons() -> list[np.ndarray]:

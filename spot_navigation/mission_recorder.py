@@ -136,7 +136,7 @@ def render_mission_preview(
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
 
-    from spot_navigation.pcd_to_boundary import load_pcd_xyz
+    from spot_navigation.pcd_io import load_pcd_xyz
 
     points = load_pcd_xyz(pcd_path)
     if len(points) == 0:

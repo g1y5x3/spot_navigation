@@ -23,7 +23,7 @@ setup(
         ),
         ("share/" + package_name + "/scripts", glob("scripts/*.py")),
     ],
-    install_requires=["setuptools"],
+    install_requires=["pypcd4>=1.4.3,<2", "setuptools"],
     zip_safe=True,
     maintainer="spot",
     maintainer_email="spot@todo.todo",
@@ -38,7 +38,6 @@ setup(
         "console_scripts": [
             "boundary_marker_publisher = spot_navigation.boundary_marker_publisher:main",
             "mission_recorder = spot_navigation.mission_recorder:main",
-            "pcd_to_boundary = spot_navigation.pcd_to_boundary:main",
             "radio_bridge = spot_navigation.radio_bridge:main",
             "route_manager = spot_navigation.route_manager:main",
         ],
