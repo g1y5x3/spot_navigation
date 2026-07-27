@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+"""Build FAR Planner prior-map assets from a PCD point cloud."""
+
 from __future__ import annotations
 
 import argparse
@@ -1017,7 +1019,7 @@ def write_preview(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Convert a PCD map into FAR boundary, preview, and VGH files."
+        description="Build FAR boundary, preview, and VGH prior-map files from a PCD."
     )
     parser.add_argument("pcd", type=Path, help="Input PCD file")
     parser.add_argument("--output-dir", type=Path, help="Output directory")

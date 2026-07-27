@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-auto_map_transform_estimator_simple.py
+align_pointcloud_to_map_frame.py
 
-Simplified semi-automatic point-cloud-to-map transform estimator.
+Interactively align a point cloud to a user-defined local map frame.
 
 Default workflow:
 1. Load a PCD/PLY point cloud.
@@ -33,16 +33,16 @@ Install:
     pip install open3d numpy matplotlib
 
 Usage:
-    python auto_map_transform_estimator_simple.py input.pcd
+    python align_pointcloud_to_map_frame.py input.pcd
 
 Example with tuning:
-    python auto_map_transform_estimator_simple.py input.pcd \
+    python align_pointcloud_to_map_frame.py input.pcd \
         --voxel-size 0.05 \
         --ransac-threshold 0.08 \
         --max-lines 16
 
 Skip the Open3D QC view:
-    python auto_map_transform_estimator_simple.py input.pcd --no-show-3d-qc
+    python align_pointcloud_to_map_frame.py input.pcd --no-show-3d-qc
 """
 
 from __future__ import annotations
@@ -1081,7 +1081,7 @@ def numpy_to_list(obj: Any) -> Any:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Simplified semi-automatic point-cloud map transform estimator."
+        description="Align a point cloud to a user-defined local map frame."
     )
     parser.add_argument(
         "pointcloud",
