@@ -6,7 +6,7 @@ Interactively align a point cloud to a user-defined local map frame.
 
 Default workflow:
 1. Load a PCD/PLY point cloud.
-2. Downsample it.
+2. Downsample it and remove sparse statistical/radius outliers.
 3. Project to top-down XY.
 4. Detect wall-like lines with RANSAC.
 5. Open a top-down plot.
@@ -25,6 +25,11 @@ Default workflow:
 
 Only exposed CLI options:
     --voxel-size
+    --statistical-neighbors
+    --statistical-std-ratio
+    --radius-outlier-neighbors
+    --radius-outlier-radius
+    --no-noise-filter
     --ransac-threshold
     --max-lines
     --no-show-3d-qc
@@ -107,6 +112,66 @@ def filter_finite_points(points: np.ndarray) -> np.ndarray:
     if not np.any(finite_mask):
         raise ValueError("No finite points remain in the point cloud.")
     return points[finite_mask]
+
+
+def filter_noise_points(
+    pcd: Any,
+    statistical_neighbors: int,
+    statistical_std_ratio: float,
+    radius_outlier_neighbors: int,
+    radius_outlier_radius: float,
+) -> tuple[Any, dict[str, Any]]:
+    """Remove sparse outliers while preserving coherent scene geometry."""
+    if statistical_neighbors < 2:
+        raise ValueError("statistical neighbors must be at least 2")
+    if statistical_std_ratio <= 0:
+        raise ValueError(
+            "statistical standard-deviation ratio must be positive"
+        )
+    if radius_outlier_neighbors < 1:
+        raise ValueError("radius outlier neighbors must be at least 1")
+    if radius_outlier_radius <= 0:
+        raise ValueError("radius outlier radius must be positive")
+
+    input_points = len(pcd.points)
+    if input_points < 3:
+        raise ValueError("Need at least 3 points for noise filtering")
+
+    effective_statistical_neighbors = min(
+        statistical_neighbors,
+        input_points - 1,
+    )
+    statistically_filtered, _ = pcd.remove_statistical_outlier(
+        nb_neighbors=effective_statistical_neighbors,
+        std_ratio=statistical_std_ratio,
+    )
+    after_statistical = len(statistically_filtered.points)
+    if after_statistical == 0:
+        raise ValueError("Statistical outlier filtering removed every point")
+
+    radius_filtered, _ = statistically_filtered.remove_radius_outlier(
+        nb_points=radius_outlier_neighbors,
+        radius=radius_outlier_radius,
+    )
+    output_points = len(radius_filtered.points)
+    if output_points == 0:
+        raise ValueError("Radius outlier filtering removed every point")
+
+    stats = {
+        "enabled": True,
+        "input_points": input_points,
+        "statistical_neighbors": statistical_neighbors,
+        "effective_statistical_neighbors": effective_statistical_neighbors,
+        "statistical_std_ratio": statistical_std_ratio,
+        "after_statistical_points": after_statistical,
+        "statistical_removed_points": input_points - after_statistical,
+        "radius_outlier_neighbors": radius_outlier_neighbors,
+        "radius_outlier_radius": radius_outlier_radius,
+        "output_points": output_points,
+        "radius_removed_points": after_statistical - output_points,
+        "removed_points": input_points - output_points,
+    }
+    return radius_filtered, stats
 
 
 def require_finite(name: str, values: np.ndarray) -> None:
@@ -1008,11 +1073,16 @@ def show_3d_axis_quality_check(
 def load_and_prepare_points(
     path: str | Path,
     voxel_size: float,
+    noise_filter: bool,
+    statistical_neighbors: int,
+    statistical_std_ratio: float,
+    radius_outlier_neighbors: int,
+    radius_outlier_radius: float,
     height_min: float | None,
     height_max: float | None,
     max_detection_points: int,
     seed: int,
-) -> tuple[o3d.geometry.PointCloud, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[Any, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     pcd = o3d.io.read_point_cloud(str(path))
     if not pcd.has_points():
         raise ValueError(f"No points found in {path}")
@@ -1032,8 +1102,39 @@ def load_and_prepare_points(
     else:
         pcd_down = pcd
 
+    points_after_downsampling = len(pcd_down.points)
+    if noise_filter:
+        print("\n--- Removing sparse point-cloud outliers ---")
+        pcd_down, noise_filter_stats = filter_noise_points(
+            pcd=pcd_down,
+            statistical_neighbors=statistical_neighbors,
+            statistical_std_ratio=statistical_std_ratio,
+            radius_outlier_neighbors=radius_outlier_neighbors,
+            radius_outlier_radius=radius_outlier_radius,
+        )
+        print(
+            "Statistical filter removed "
+            f"{noise_filter_stats['statistical_removed_points']} points"
+        )
+        print(
+            "Radius filter removed "
+            f"{noise_filter_stats['radius_removed_points']} additional points"
+        )
+        print(
+            f"Retained {noise_filter_stats['output_points']} / "
+            f"{noise_filter_stats['input_points']} downsampled points"
+        )
+    else:
+        noise_filter_stats = {
+            "enabled": False,
+            "input_points": points_after_downsampling,
+            "output_points": points_after_downsampling,
+            "removed_points": 0,
+        }
+        print("Noise filtering disabled")
+
     points = filter_finite_points(np.asarray(pcd_down.points))
-    print(f"Using {len(points)} points after voxel downsampling")
+    print(f"Using {len(points)} points for alignment after preprocessing")
 
     all_z = points[:, 2].copy()
 
@@ -1062,7 +1163,7 @@ def load_and_prepare_points(
     else:
         xy_detection = xy
 
-    return pcd_down, points, all_z, xy_detection
+    return pcd_down, points, all_z, xy_detection, noise_filter_stats
 
 
 def numpy_to_list(obj: Any) -> Any:
@@ -1092,6 +1193,39 @@ def main() -> int:
         type=float,
         default=0.05,
         help="Voxel downsample size in meters. Use 0 to disable.",
+    )
+    parser.add_argument(
+        "--statistical-neighbors",
+        type=int,
+        default=20,
+        help="Neighbors used by statistical outlier removal (default: 20).",
+    )
+    parser.add_argument(
+        "--statistical-std-ratio",
+        type=float,
+        default=2.0,
+        help="Statistical outlier standard-deviation ratio (default: 2.0).",
+    )
+    parser.add_argument(
+        "--radius-outlier-neighbors",
+        type=int,
+        default=3,
+        help="Minimum neighbors inside the outlier radius (default: 3).",
+    )
+    parser.add_argument(
+        "--radius-outlier-radius",
+        type=float,
+        default=0.30,
+        help=(
+            "Radius used for sparse outlier removal in meters (default: 0.30)."
+        ),
+    )
+    parser.add_argument(
+        "--no-noise-filter",
+        dest="noise_filter",
+        action="store_false",
+        default=True,
+        help="Disable statistical and radius outlier removal.",
     )
     parser.add_argument(
         "--ransac-threshold",
@@ -1160,9 +1294,20 @@ def main() -> int:
     random.seed(args.seed)
     np.random.seed(args.seed)
 
-    pcd_down, downsampled_points, z_values, xy_detection = load_and_prepare_points(
+    (
+        pcd_down,
+        downsampled_points,
+        z_values,
+        xy_detection,
+        noise_filter_stats,
+    ) = load_and_prepare_points(
         path=args.pointcloud,
         voxel_size=args.voxel_size,
+        noise_filter=args.noise_filter,
+        statistical_neighbors=args.statistical_neighbors,
+        statistical_std_ratio=args.statistical_std_ratio,
+        radius_outlier_neighbors=args.radius_outlier_neighbors,
+        radius_outlier_radius=args.radius_outlier_radius,
         height_min=args.height_min,
         height_max=args.height_max,
         max_detection_points=args.max_detection_points,
@@ -1335,6 +1480,7 @@ def main() -> int:
         "axis_length": float(args.axis_length),
         "origin_marker_radius": float(args.origin_marker_radius),
         "manhattan_base_angle_degrees": math.degrees(base_angle),
+        "noise_filter": noise_filter_stats,
         "diagnostics": diagnostics,
         "parameters": vars(args),
     }
