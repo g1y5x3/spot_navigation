@@ -35,7 +35,12 @@ Because alignment and FAR prior-map generation normally run back to back,
 `prepare_map.py` provides one transparent two-stage command. It prints each
 underlying command before running it and streams both tools' normal output, so
 the detected lines, selected frame, grid statistics, warnings, and generated
-paths remain visible.
+files remain visible.
+
+The executable entry scripts stay directly under `scripts/`. Their shared
+offline map-processing implementation is colocated under `scripts/map_tools/`;
+it is internal to these standalone tools rather than part of the ROS package
+API.
 
 ```bash
 python3 "$SPOT_NAV/scripts/prepare_map.py" \

@@ -22,6 +22,10 @@ setup(
             + glob("map/*.yaml"),
         ),
         ("share/" + package_name + "/scripts", glob("scripts/*.py")),
+        (
+            "share/" + package_name + "/scripts/map_tools",
+            glob("scripts/map_tools/*.py"),
+        ),
     ],
     install_requires=["pypcd4>=1.4.3,<2", "setuptools"],
     zip_safe=True,

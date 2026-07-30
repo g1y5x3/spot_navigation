@@ -12,6 +12,25 @@ from typing import Sequence
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from map_tools.outputs import (  # noqa: E402
+    alignment_output_paths,
+    far_output_paths,
+)
+from map_tools.pointcloud import add_alignment_options  # noqa: E402
+
+
+_ALIGNMENT_VALUE_OPTIONS = (
+    ("--voxel-size", "voxel_size"),
+    ("--statistical-neighbors", "statistical_neighbors"),
+    ("--statistical-std-ratio", "statistical_std_ratio"),
+    ("--radius-outlier-neighbors", "radius_outlier_neighbors"),
+    ("--radius-outlier-radius", "radius_outlier_radius"),
+    ("--ransac-threshold", "ransac_threshold"),
+    ("--max-lines", "max_lines"),
+)
 
 
 def parse_args(
@@ -23,8 +42,7 @@ def parse_args(
         wrapper_arguments = arguments[:separator]
         build_arguments = arguments[separator + 1:]
     else:
-        wrapper_arguments = arguments
-        build_arguments = []
+        wrapper_arguments, build_arguments = arguments, []
 
     parser = argparse.ArgumentParser(
         description=(
@@ -51,69 +69,11 @@ def parse_args(
             "a _transformed suffix for the aligned PCD and FAR assets"
         ),
     )
-    parser.add_argument(
-        "--voxel-size",
-        type=float,
-        default=0.05,
-        help="Alignment voxel downsample size in meters",
-    )
-    parser.add_argument(
-        "--statistical-neighbors",
-        type=int,
-        default=20,
-        help="Neighbors used by alignment statistical outlier removal",
-    )
-    parser.add_argument(
-        "--statistical-std-ratio",
-        type=float,
-        default=2.0,
-        help="Alignment statistical outlier standard-deviation ratio",
-    )
-    parser.add_argument(
-        "--radius-outlier-neighbors",
-        type=int,
-        default=3,
-        help="Minimum neighbors used by alignment radius outlier removal",
-    )
-    parser.add_argument(
-        "--radius-outlier-radius",
-        type=float,
-        default=0.30,
-        help="Alignment radius outlier search distance in meters",
-    )
-    parser.add_argument(
-        "--no-noise-filter",
-        dest="noise_filter",
-        action="store_false",
-        default=True,
-        help="Disable alignment statistical and radius outlier removal",
-    )
-    parser.add_argument(
-        "--ransac-threshold",
-        type=float,
-        default=0.08,
-        help="Alignment line-inlier threshold in meters",
-    )
-    parser.add_argument(
-        "--max-lines",
-        type=int,
-        default=16,
-        help="Maximum wall/edge lines detected during alignment",
-    )
-    parser.add_argument(
-        "--no-show-3d-qc",
-        dest="show_3d_qc",
-        action="store_false",
-        default=True,
-        help="Skip the alignment tool's final Open3D quality-control view",
-    )
+    add_alignment_options(parser)
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help=(
-            "Print both underlying commands and output paths without running "
-            "them"
-        ),
+        help="Print both commands and output paths without running them",
     )
     return parser, parser.parse_args(wrapper_arguments), build_arguments
 
@@ -123,19 +83,38 @@ def output_paths(
     name: str,
     include_preview: bool = True,
 ) -> list[Path]:
-    transformed_name = f"{name}_transformed"
+    alignment = alignment_output_paths(output_dir, name)
+    far = far_output_paths(output_dir, f"{name}_transformed")
     paths = [
-        output_dir / f"{transformed_name}.pcd",
-        output_dir / f"{name}_transform.json",
-        output_dir / f"{name}_transform_debug.png",
-        output_dir / f"{transformed_name}.vgh",
-        output_dir / f"{transformed_name}_boundary.ply",
-        output_dir / f"{transformed_name}_trajectory.txt",
-        output_dir / f"{transformed_name}_boundary_stats.json",
+        alignment.pointcloud,
+        alignment.transform,
+        alignment.debug_plot,
+        far.visibility_graph,
+        far.boundary,
+        far.trajectory,
+        far.stats,
     ]
     if include_preview:
-        paths.append(output_dir / f"{transformed_name}_boundary_preview.png")
+        paths.append(far.preview)
     return paths
+
+
+def _alignment_command(
+    pointcloud: Path,
+    args: argparse.Namespace,
+) -> list[str]:
+    command = [
+        sys.executable,
+        str(SCRIPT_DIR / "align_pointcloud_to_map_frame.py"),
+        str(pointcloud),
+    ]
+    for flag, attribute in _ALIGNMENT_VALUE_OPTIONS:
+        command.extend((flag, str(getattr(args, attribute))))
+    if not args.show_3d_qc:
+        command.append("--no-show-3d-qc")
+    if not args.noise_filter:
+        command.append("--no-noise-filter")
+    return command
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -147,35 +126,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--name must be a single non-empty filename stem")
 
     transformed_name = f"{name}_transformed"
-    aligned_pcd = output_dir / f"{transformed_name}.pcd"
-    align_command = [
-        sys.executable,
-        str(SCRIPT_DIR / "align_pointcloud_to_map_frame.py"),
-        str(pointcloud),
-        "--voxel-size",
-        str(args.voxel_size),
-        "--statistical-neighbors",
-        str(args.statistical_neighbors),
-        "--statistical-std-ratio",
-        str(args.statistical_std_ratio),
-        "--radius-outlier-neighbors",
-        str(args.radius_outlier_neighbors),
-        "--radius-outlier-radius",
-        str(args.radius_outlier_radius),
-        "--ransac-threshold",
-        str(args.ransac_threshold),
-        "--max-lines",
-        str(args.max_lines),
-    ]
-    if not args.show_3d_qc:
-        align_command.append("--no-show-3d-qc")
-    if not args.noise_filter:
-        align_command.append("--no-noise-filter")
-
+    alignment = alignment_output_paths(output_dir, name)
+    default_alignment = alignment_output_paths(output_dir)
+    align_command = _alignment_command(pointcloud, args)
     build_command = [
         sys.executable,
         str(SCRIPT_DIR / "build_far_prior_map.py"),
-        str(aligned_pcd),
+        str(alignment.pointcloud),
         "--output-dir",
         str(output_dir),
         "--name",
@@ -191,7 +148,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.dry_run:
         print("[1/2] Align point cloud")
         print(f"$ {shlex.join(align_command)}")
-        print(f"  aligned PCD: {aligned_pcd}")
+        print(f"  aligned PCD: {alignment.pointcloud}")
         print("[2/2] Build FAR prior map")
         print(f"$ {shlex.join(build_command)}")
         print("Outputs:")
@@ -205,20 +162,22 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print("[1/2] Align point cloud", flush=True)
     print(f"$ {shlex.join(align_command)}", flush=True)
-    align_result = subprocess.run(align_command, cwd=output_dir, check=False)
-    if align_result.returncode != 0:
-        return align_result.returncode
+    result = subprocess.run(align_command, cwd=output_dir, check=False)
+    if result.returncode != 0:
+        return result.returncode
 
-    alignment_outputs = {
-        output_dir / "transformed.pcd": aligned_pcd,
-        output_dir / "estimated_transform.json": (
-            output_dir / f"{name}_transform.json"
+    for source, destination in zip(
+        (
+            default_alignment.pointcloud,
+            default_alignment.transform,
+            default_alignment.debug_plot,
         ),
-        output_dir / "transform_debug.png": (
-            output_dir / f"{name}_transform_debug.png"
+        (
+            alignment.pointcloud,
+            alignment.transform,
+            alignment.debug_plot,
         ),
-    }
-    for source, destination in alignment_outputs.items():
+    ):
         if not source.is_file():
             print(
                 f"ERROR: alignment did not produce {source}",
@@ -229,9 +188,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print("[2/2] Build FAR prior map", flush=True)
     print(f"$ {shlex.join(build_command)}", flush=True)
-    build_result = subprocess.run(build_command, cwd=output_dir, check=False)
-    if build_result.returncode != 0:
-        return build_result.returncode
+    result = subprocess.run(build_command, cwd=output_dir, check=False)
+    if result.returncode != 0:
+        return result.returncode
 
     print("Outputs:")
     for path in outputs:

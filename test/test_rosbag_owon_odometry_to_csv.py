@@ -135,6 +135,7 @@ def test_convert_bag_joins_each_voltage_to_nearest_odometry(
         (MODULE.ODOMETRY_TOPIC, _odometry(2.0), 200),
         (MODULE.OWON_TOPIC, SimpleNamespace(data=52.0), 260),
     ]
+    filtered_topics: list[str] = []
 
     class FakeSequentialReader:
         def __init__(self) -> None:
@@ -154,6 +155,9 @@ def test_convert_bag_joins_each_voltage_to_nearest_odometry(
                 SimpleNamespace(name="/unrelated", type="std_msgs/msg/String"),
             ]
 
+        def set_filter(self, storage_filter) -> None:
+            filtered_topics.extend(storage_filter.topics)
+
         def has_next(self) -> bool:
             return self.index < len(messages)
 
@@ -172,10 +176,15 @@ def test_convert_bag_joins_each_voltage_to_nearest_odometry(
             self.input_format = input_format
             self.output_format = output_format
 
+    class FakeStorageFilter:
+        def __init__(self, topics: list[str]) -> None:
+            self.topics = topics
+
     rosbag2_module = ModuleType("rosbag2_py")
     setattr(rosbag2_module, "SequentialReader", FakeSequentialReader)
     setattr(rosbag2_module, "StorageOptions", FakeStorageOptions)
     setattr(rosbag2_module, "ConverterOptions", FakeConverterOptions)
+    setattr(rosbag2_module, "StorageFilter", FakeStorageFilter)
     nav_msgs_module = ModuleType("nav_msgs")
     nav_msgs_msg_module = ModuleType("nav_msgs.msg")
     setattr(nav_msgs_msg_module, "Odometry", object)
@@ -212,6 +221,7 @@ def test_convert_bag_joins_each_voltage_to_nearest_odometry(
         3,
         0,
     )
+    assert filtered_topics == [MODULE.OWON_TOPIC, MODULE.ODOMETRY_TOPIC]
     with output_path.open("r", encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
     assert [row["voltage"] for row in rows] == ["50.0", "51.0", "52.0"]

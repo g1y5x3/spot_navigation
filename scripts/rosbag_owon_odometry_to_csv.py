@@ -170,6 +170,9 @@ def convert_bag(
     }
     _validate_topic_type(topic_types, OWON_TOPIC, OWON_TYPE)
     _validate_topic_type(topic_types, ODOMETRY_TOPIC, ODOMETRY_TYPE)
+    reader.set_filter(
+        rosbag2_py.StorageFilter(topics=[OWON_TOPIC, ODOMETRY_TOPIC])
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     stream, temporary_path = _open_temporary_csv(output_path)
