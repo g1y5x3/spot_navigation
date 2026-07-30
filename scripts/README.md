@@ -57,6 +57,9 @@ In RViz:
 2. Use **2D Goal Pose** to add waypoints in route order.
 3. Press `Ctrl+C` in the launch terminal when finished.
 
+Accepted poses remain visible as `START`, `W1`, `W2`, and so on, with arrows
+showing their headings and a line showing the mission order.
+
 The recorder writes:
 
 ```text

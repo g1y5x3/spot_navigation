@@ -7,6 +7,7 @@ Panels:
         - /Global Options1
         - /Map Cloud1
         - /Map Origin1
+        - /Recorded Mission1
       Splitter Ratio: 0.55
     Tree Height: 500
   - Class: rviz_common/Tool Properties
@@ -76,6 +77,21 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /boundary_map
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Recorded Mission
+      Namespaces:
+        mission_initial_pose: true
+        mission_labels: true
+        mission_route: true
+        mission_waypoints: true
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /mission_recorder/markers
       Value: true
   Enabled: true
   Global Options:

@@ -15,6 +15,16 @@ from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovarianceStamped
 from pypcd4 import PointCloud
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from visualization_msgs.msg import MarkerArray
+
+from spot_navigation.mission_markers import (
+    MISSION_MARKER_TOPIC,
+    ROUTE_COLOR,
+    START_COLOR,
+    WAYPOINT_COLOR,
+    build_mission_markers,
+)
 
 
 def _pose_as_mapping(pose: Pose) -> dict[str, dict[str, float]]:
@@ -205,7 +215,7 @@ def render_mission_preview(
                 xytext=start,
                 arrowprops={
                     "arrowstyle": "-|>",
-                    "color": "#2563eb",
+                    "color": ROUTE_COLOR,
                     "linewidth": 1.9,
                     "mutation_scale": 12,
                     "shrinkA": 6,
@@ -249,7 +259,7 @@ def render_mission_preview(
             positions[1:, 0],
             positions[1:, 1],
             s=65,
-            c="#f97316",
+            c=WAYPOINT_COLOR,
             edgecolors="#7c2d12",
             linewidths=1.0,
             zorder=4,
@@ -259,7 +269,7 @@ def render_mission_preview(
             [positions[0, 1]],
             s=180,
             marker="*",
-            c="#22c55e",
+            c=START_COLOR,
             edgecolors="#14532d",
             linewidths=1.2,
             zorder=6,
@@ -319,7 +329,7 @@ def render_mission_preview(
                 [0],
                 marker="*",
                 linestyle="None",
-                markerfacecolor="#22c55e",
+                markerfacecolor=START_COLOR,
                 markeredgecolor="#14532d",
                 markersize=12,
                 label="Initial pose",
@@ -329,7 +339,7 @@ def render_mission_preview(
                 [0],
                 marker="o",
                 linestyle="None",
-                markerfacecolor="#f97316",
+                markerfacecolor=WAYPOINT_COLOR,
                 markeredgecolor="#7c2d12",
                 markersize=7,
                 label="Ordered waypoints",
@@ -337,7 +347,7 @@ def render_mission_preview(
             Line2D(
                 [0],
                 [0],
-                color="#2563eb",
+                color=ROUTE_COLOR,
                 linewidth=2,
                 label="Mission order",
             ),
@@ -386,7 +396,9 @@ class MissionRecorder(Node):
         if not self.frame_id:
             raise RuntimeError("Parameter 'frame_id' must be non-empty")
 
-        mission_parameter = str(self.get_parameter("output_mission_file").value)
+        mission_parameter = str(
+            self.get_parameter("output_mission_file").value
+        )
         if not mission_parameter:
             raise RuntimeError(
                 "Parameter 'output_mission_file' must name a YAML file"
@@ -412,8 +424,21 @@ class MissionRecorder(Node):
                 raise RuntimeError(str(error)) from error
         elif preview_parameter.strip():
             raise RuntimeError(
-                "Parameter 'pcd_file' is required when output_preview_file is set"
+                "Parameter 'pcd_file' is required when "
+                "output_preview_file is set"
             )
+
+        self.initial_pose: Pose | None = None
+        self.waypoints: list[Pose] = []
+        marker_qos = QoSProfile(depth=1)
+        marker_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
+        marker_qos.reliability = ReliabilityPolicy.RELIABLE
+        self.marker_publisher = self.create_publisher(
+            MarkerArray,
+            MISSION_MARKER_TOPIC,
+            marker_qos,
+        )
+        self._publish_markers()
 
         self.create_subscription(
             PoseWithCovarianceStamped,
@@ -428,10 +453,9 @@ class MissionRecorder(Node):
             10,
         )
 
-        self.initial_pose: Pose | None = None
-        self.waypoints: list[Pose] = []
         self.get_logger().info(
-            "Use RViz '2D Pose Estimate' once, then '2D Goal Pose' in route order"
+            "Use RViz '2D Pose Estimate' once, then '2D Goal Pose' "
+            "in route order"
         )
         output_lines = [f"  {self.output_mission_path}"]
         if self.output_preview_path is not None:
@@ -441,7 +465,10 @@ class MissionRecorder(Node):
             + "\n".join(output_lines)
         )
 
-    def _initial_pose_callback(self, message: PoseWithCovarianceStamped) -> None:
+    def _initial_pose_callback(
+        self,
+        message: PoseWithCovarianceStamped,
+    ) -> None:
         if not self._accept_frame(message.header.frame_id, "initial pose"):
             return
         pose = message.pose.pose
@@ -452,6 +479,7 @@ class MissionRecorder(Node):
             return
 
         self.initial_pose = pose
+        self._publish_markers()
         self.get_logger().info(
             "Captured initial pose: "
             f"x={pose.position.x:.6f}, y={pose.position.y:.6f}"
@@ -473,7 +501,8 @@ class MissionRecorder(Node):
             return
 
         self.waypoints.append(pose)
-        waypoint_index = len(self.waypoints) - 1
+        self._publish_markers()
+        waypoint_index = len(self.waypoints)
         self.get_logger().info(
             f"Captured waypoint {waypoint_index}: "
             f"x={pose.position.x:.6f}, y={pose.position.y:.6f}"
@@ -487,6 +516,15 @@ class MissionRecorder(Node):
             f"expected '{self.frame_id}'"
         )
         return False
+
+    def _publish_markers(self) -> None:
+        markers = build_mission_markers(
+            self.frame_id,
+            self.get_clock().now().to_msg(),
+            self.initial_pose,
+            self.waypoints,
+        )
+        self.marker_publisher.publish(markers)
 
     @staticmethod
     def _validate_pose(pose: Pose) -> None:
@@ -553,7 +591,9 @@ def main(args=None) -> None:
             try:
                 node.write_outputs()
             except Exception as error:
-                node.get_logger().error(f"Failed to write mission outputs: {error}")
+                node.get_logger().error(
+                    f"Failed to write mission outputs: {error}"
+                )
             node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

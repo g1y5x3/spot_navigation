@@ -3,6 +3,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 import yaml
@@ -25,10 +26,43 @@ class _Pose:
         self.orientation = SimpleNamespace(x=0.0, y=0.0, z=0.0, w=0.0)
 
 
+class _Point:
+    def __init__(self) -> None:
+        self.x = 0.0
+        self.y = 0.0
+        self.z = 0.0
+
+
+class _Marker:
+    ADD = 0
+    ARROW = 0
+    LINE_STRIP = 4
+    TEXT_VIEW_FACING = 9
+    DELETEALL = 3
+
+    def __init__(self) -> None:
+        self.header = SimpleNamespace(frame_id="", stamp=None)
+        self.ns = ""
+        self.id = 0
+        self.type = 0
+        self.action = 0
+        self.pose = _Pose()
+        self.scale = SimpleNamespace(x=0.0, y=0.0, z=0.0)
+        self.color = SimpleNamespace(r=0.0, g=0.0, b=0.0, a=0.0)
+        self.points: list[_Point] = []
+        self.text = ""
+
+
+class _MarkerArray:
+    def __init__(self) -> None:
+        self.markers: list[_Marker] = []
+
+
 if importlib.util.find_spec("rclpy") is None:
     geometry_messages = _install_module(
         "geometry_msgs.msg",
         {
+            "Point": _Point,
             "Pose": _Pose,
             "PoseStamped": object,
             "PoseWithCovarianceStamped": object,
@@ -41,10 +75,27 @@ if importlib.util.find_spec("rclpy") is None:
         {"ExternalShutdownException": KeyboardInterrupt},
     )
     _install_module("rclpy.node", {"Node": object})
+    _install_module(
+        "rclpy.qos",
+        {
+            "DurabilityPolicy": SimpleNamespace(TRANSIENT_LOCAL=1),
+            "QoSProfile": lambda depth: SimpleNamespace(depth=depth),
+            "ReliabilityPolicy": SimpleNamespace(RELIABLE=1),
+        },
+    )
+    visualization_messages = _install_module(
+        "visualization_msgs.msg",
+        {"Marker": _Marker, "MarkerArray": _MarkerArray},
+    )
+    _install_module("visualization_msgs", {"msg": visualization_messages})
 
 
-from geometry_msgs.msg import Pose
-from spot_navigation.mission_recorder import (
+from geometry_msgs.msg import Pose  # noqa: E402
+from visualization_msgs.msg import Marker  # noqa: E402
+from spot_navigation.mission_markers import (  # noqa: E402
+    build_mission_markers,
+)
+from spot_navigation.mission_recorder import (  # noqa: E402
     MissionRecorder,
     render_mission_preview,
     resolve_preview_path,
@@ -68,7 +119,9 @@ def _pose(x: float, y: float, qz: float = 0.0, qw: float = 1.0) -> Pose:
 
 
 def test_launch_forwards_frame_id_to_rviz_fixed_frame() -> None:
-    launch_path = Path(__file__).parents[1] / "launch/mission_recorder.launch.py"
+    launch_path = (
+        Path(__file__).parents[1] / "launch/mission_recorder.launch.py"
+    )
     tree = ast.parse(launch_path.read_text(encoding="utf-8"))
     rviz_assignment = next(
         node
@@ -107,8 +160,108 @@ def test_validate_pose_accepts_ros_pose() -> None:
 
 
 def test_validate_pose_rejects_zero_quaternion() -> None:
-    with pytest.raises(ValueError, match="orientation quaternion cannot be zero"):
+    with pytest.raises(
+        ValueError,
+        match="orientation quaternion cannot be zero",
+    ):
         MissionRecorder._validate_pose(_pose(1.0, 2.0, 0.0, 0.0))
+
+
+@pytest.mark.parametrize("callback_name", ["initial", "goal"])
+def test_accepted_pose_callback_refreshes_visualization(
+    callback_name: str,
+) -> None:
+    pose = _pose(1.0, 2.0)
+    initial_pose = _pose(0.0, 0.0) if callback_name == "goal" else None
+    publish_markers = Mock()
+    logger = SimpleNamespace(error=Mock(), info=Mock(), warning=Mock())
+    recorder = SimpleNamespace(
+        frame_id="map",
+        initial_pose=initial_pose,
+        waypoints=[],
+        _accept_frame=Mock(return_value=True),
+        _validate_pose=MissionRecorder._validate_pose,
+        _publish_markers=publish_markers,
+        get_logger=Mock(return_value=logger),
+    )
+    message_pose = (
+        SimpleNamespace(pose=pose) if callback_name == "initial" else pose
+    )
+    message = SimpleNamespace(
+        header=SimpleNamespace(frame_id="map"),
+        pose=message_pose,
+    )
+
+    callback = getattr(MissionRecorder, f"_{callback_name}_pose_callback")
+    callback(recorder, message)
+
+    publish_markers.assert_called_once_with()
+    if callback_name == "initial":
+        assert recorder.initial_pose is pose
+        assert recorder.waypoints == []
+    else:
+        assert recorder.initial_pose is initial_pose
+        assert recorder.waypoints == [pose]
+
+
+def test_build_mission_markers_shows_start_route_and_waypoints() -> None:
+    stamp = Marker().header.stamp
+    clear_markers = build_mission_markers("map", stamp, None, ())
+    marker_array = build_mission_markers(
+        "map",
+        stamp,
+        _pose(1.0, 2.0),
+        (_pose(3.0, 4.0), _pose(5.0, 6.0, 0.7071068, 0.7071068)),
+    )
+
+    assert len(clear_markers.markers) == 1
+    assert (
+        clear_markers.markers[0].action
+        == clear_markers.markers[0].DELETEALL
+    )
+    assert all(
+        marker.action != Marker.DELETEALL
+        for marker in marker_array.markers
+    )
+    markers_by_namespace = {
+        marker.ns: marker
+        for marker in marker_array.markers
+        if marker.ns in {"mission_route", "mission_initial_pose"}
+    }
+    assert (
+        markers_by_namespace["mission_initial_pose"].type == Marker.ARROW
+    )
+    assert markers_by_namespace["mission_route"].type == Marker.LINE_STRIP
+    assert [
+        (point.x, point.y)
+        for point in markers_by_namespace["mission_route"].points
+    ] == [(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)]
+    assert [
+        marker.text
+        for marker in marker_array.markers
+        if marker.ns == "mission_labels"
+    ] == ["START", "W1", "W2"]
+    assert [
+        marker.id
+        for marker in marker_array.markers
+        if marker.ns == "mission_waypoints"
+    ] == [1, 2]
+
+
+def test_rviz_enables_recorded_mission_markers() -> None:
+    rviz_path = Path(__file__).parents[1] / "rviz/mission_recorder.rviz"
+    configuration = yaml.safe_load(rviz_path.read_text(encoding="utf-8"))
+    displays = configuration["Visualization Manager"]["Displays"]
+
+    mission_display = next(
+        display
+        for display in displays
+        if display.get("Name") == "Recorded Mission"
+    )
+    assert mission_display["Class"] == "rviz_default_plugins/MarkerArray"
+    assert mission_display["Enabled"] is True
+    assert mission_display["Topic"]["Value"] == "/mission_recorder/markers"
+    assert mission_display["Topic"]["Durability Policy"] == "Transient Local"
 
 
 def test_write_mission_preserves_capture_order(tmp_path: Path) -> None:
