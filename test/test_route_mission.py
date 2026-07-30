@@ -111,19 +111,6 @@ def test_load_mission_validates_pose_fields(
     assert str(error.value) == expected_error
 
 
-def test_office_mission_configuration_is_valid() -> None:
-    package_root = Path(__file__).parents[1]
-    mission = load_mission(package_root / "map" / "office_mission.yaml")
-
-    assert mission.frame_id == "map"
-    assert [pose.position.x for pose in mission.waypoints] == [
-        pytest.approx(5.79384),
-        pytest.approx(5.79811),
-        pytest.approx(1.59912),
-        pytest.approx(1.43618),
-    ]
-
-
 def test_far_success_advances_only_when_odometry_matches_current_goal(
     tmp_path: Path,
 ) -> None:

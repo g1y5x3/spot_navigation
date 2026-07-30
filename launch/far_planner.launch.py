@@ -47,12 +47,11 @@ def generate_launch_description():
 
     mission_file_arg = DeclareLaunchArgument(
         'mission_file',
-        default_value=PathJoinSubstitution([
-            get_package_share_directory('spot_navigation'),
-            'map',
-            'office_mission.yaml'
-        ]),
-        description='Mission YAML containing the initial pose and ordered waypoints'
+        default_value='',
+        description=(
+            'Mission YAML containing the initial pose and ordered waypoints; '
+            'required when route_manager:=true'
+        )
     )
 
     route_manager_delay_arg = DeclareLaunchArgument(
