@@ -41,9 +41,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --no-cache-dir "pypcd4==1.4.3" && \
-    source "/opt/ros/${ROS_DISTRO}/setup.bash" && \
-    python3 -c "import cv2, matplotlib, numpy, open3d, pypcd4, rclpy, rosbag2_py, serial, tkinter, yaml; from geometry_msgs.msg import Pose; from visualization_msgs.msg import Marker; print('spot_navigation dependencies ready')"
-
+#    source "/opt/ros/${ROS_DISTRO}/setup.bash" && \
+#    python3 -c "import cv2, matplotlib, numpy, open3d, pypcd4, rclpy, rosbag2_py, serial, tkinter, yaml; from geometry_msgs.msg import Pose; from visualization_msgs.msg import Marker; print('spot_navigation dependencies ready')"
 RUN groupadd --gid "${USER_GID}" "${USERNAME}" && \
     useradd --uid "${USER_UID}" --gid "${USER_GID}" --create-home --shell /bin/bash "${USERNAME}" && \
     usermod --append --groups dialout,plugdev,video "${USERNAME}"
