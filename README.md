@@ -132,10 +132,22 @@ Dockerfile or package source changes.
 
 ## Tune FAR between mission attempts
 
+This navigation example assumes the workspace is at `~/mission_ws`. Start the
+recorded Dorsett mission with:
+
+```bash
+cd ~/mission_ws
+ros2 launch spot_navigation far_planner.launch.py \
+  route_manager:=true \
+  mission_file:=$HOME/mission_ws/src/spot_navigation/map/dorsett_mission.yaml \
+  load_prior_map:=true \
+  prior_map_path:=$HOME/mission_ws/src/spot_navigation/map/dorsett_transformed.vgh
+```
+
 FAR reads its planning parameters when the node starts. If it cannot find a
 path, press `Ctrl+C`, edit the six recovery parameters at the top of
-`~/mission_ws/src/spot_navigation/config/far_planner.yaml`, and relaunch the
-same mission with the same launch command:
+`~/mission_ws/src/spot_navigation/config/far_planner.yaml`, then rerun the FAR
+launch command above unchanged:
 
 - `sensor_range`
 - `terrain_range`

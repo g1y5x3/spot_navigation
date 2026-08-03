@@ -27,9 +27,15 @@ def test_far_config_starts_with_relaunch_tuning_parameters() -> None:
 
 def test_readme_documents_yaml_relaunch_tuning() -> None:
     readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
+    normalized_readme = " ".join(readme.split())
 
     for parameter_name in RELAUNCH_TUNING_PARAMETERS:
         assert f"`{parameter_name}`" in readme
 
     assert "ros2 param set /far_planner" not in readme
-    assert "relaunch the\nsame mission" in readme
+    assert "ros2 launch spot_navigation far_planner.launch.py" in readme
+    assert "route_manager:=true" in readme
+    assert "mission_file:=$HOME/mission_ws/" in readme
+    assert "prior_map_path:=$HOME/mission_ws/" in readme
+    assert "workspace is at `~/mission_ws`" in normalized_readme
+    assert "rerun the FAR launch command above unchanged" in normalized_readme
