@@ -129,3 +129,44 @@ src/spot_navigation/map/dorsett_mission.png
 
 For later sessions, repeat from step 2. Rebuild the image only when the
 Dockerfile or package source changes.
+
+## Tune FAR between mission attempts
+
+FAR reads its planning parameters when the node starts. If it cannot find a
+path, press `Ctrl+C`, edit the six recovery parameters at the top of
+`~/mission_ws/src/spot_navigation/config/far_planner.yaml`, and relaunch the
+same mission with the same launch command:
+
+- `sensor_range`
+- `terrain_range`
+- `local_planner_range`
+- `util/obs_inflate_size`
+- `g_planner/converge_distance`
+- `g_planner/reach_goal_vote_size`
+
+For the current 0.1 m voxel configuration, use these as practical trial bands,
+not hard FAR limits:
+
+| Parameter | Suggested range | When FAR cannot find a path |
+| --- | --- | --- |
+| `sensor_range` | 8-20 m | Increase toward 15-20 m for more graph context. |
+| `terrain_range` | 7.5-15 m | Increase with `sensor_range`; keep it no larger than `sensor_range`. |
+| `local_planner_range` | 2-4 m | Try shorter in clutter and longer in open space. |
+| `util/obs_inflate_size` | 0-2 voxels | Reduce toward 0 for narrow passages. |
+| `g_planner/converge_distance` | 0.5-1.0 m | Increase if waypoint handoff is too strict. |
+| `g_planner/reach_goal_vote_size` | 2-5 votes | Reduce toward 2 to accept goal links sooner. |
+
+Larger ranges provide more planning context but cost more processing. Lower
+obstacle inflation can help in narrow passages. A larger convergence distance
+is more tolerant near a waypoint, while a lower goal-vote count accepts goal
+links sooner but is less conservative. The new values take effect when FAR is
+restarted; the FAR Planner source does not need to be modified.
+
+Build `spot_navigation` once with `--symlink-install` so subsequent source-YAML
+edits are reflected without rebuilding:
+
+```bash
+cd ~/mission_ws
+colcon build --symlink-install --packages-select spot_navigation
+source install/setup.bash
+```
