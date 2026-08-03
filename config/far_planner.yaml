@@ -2,8 +2,8 @@ far_planner:
   ros__parameters:
     # Navigation recovery tuning. Edit here, stop the launch, then relaunch the mission.
     # Suggested trial ranges assume the 0.1 m voxel size below; they are not hard limits.
-    sensor_range: 10.0                    # 8-20 m; increase for more graph context
-    terrain_range: 10.0                   # 7.5-15 m; keep <= sensor_range
+    sensor_range: 10.0                    # 10-50 m; increase for more graph context
+    terrain_range: 10.0                   # 10 m to sensor_range
     local_planner_range: 2.0              # 2-4 m; shorter can help in clutter
     util/obs_inflate_size: 0              # 0-2 voxels; lower fits narrow passages
     g_planner/converge_distance: 0.75     # 0.5-1.0 m; larger is more tolerant

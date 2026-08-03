@@ -161,8 +161,8 @@ not hard FAR limits:
 
 | Parameter | Suggested range | When FAR cannot find a path |
 | --- | --- | --- |
-| `sensor_range` | 8-20 m | Increase toward 15-20 m for more graph context. |
-| `terrain_range` | 7.5-15 m | Increase with `sensor_range`; keep it no larger than `sensor_range`. |
+| `sensor_range` | 10-50 m | Increase gradually for more graph context. |
+| `terrain_range` | 10 m to `sensor_range` | Increase with `sensor_range`; never exceed it. |
 | `local_planner_range` | 2-4 m | Try shorter in clutter and longer in open space. |
 | `util/obs_inflate_size` | 0-2 voxels | Reduce toward 0 for narrow passages. |
 | `g_planner/converge_distance` | 0.5-1.0 m | Increase if waypoint handoff is too strict. |
